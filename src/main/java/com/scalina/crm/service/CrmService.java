@@ -3,6 +3,7 @@ package com.scalina.crm.service;
 import com.scalina.crm.dto.DashboardMetricsDTO;
 import com.scalina.crm.dto.FinancialMetrics;
 import com.scalina.crm.model.*;
+import com.scalina.crm.model.enums.InvoiceStatus;
 import com.scalina.crm.model.enums.PipelineStage;
 import com.scalina.crm.repository.*;
 import org.springframework.stereotype.Service;
@@ -49,26 +50,60 @@ public class CrmService {
         return clientLeadRepository.findByAgencyId(agencyId);
     }
 
-    // 🔥 THIS IS THE FIXED METHOD 🔥
+    // 🔥 UPDATED SAVE METHOD 🔥
     public ClientLead saveClientLead(ClientLead clientLead, String agencyId) {
-        // If it already has an ID, it's an update from the Kanban board!
         if (clientLead.getId() != null) {
             ClientLead existing = clientLeadRepository.findById(clientLead.getId())
                     .orElseThrow(() -> new RuntimeException("Lead not found"));
 
-            // Safely update only the necessary fields
-            existing.setName(clientLead.getName());
-            existing.setCompany(clientLead.getCompany());
-            existing.setEmail(clientLead.getEmail());
-            existing.setPipelineStage(clientLead.getPipelineStage());
+            if (clientLead.getName() != null) existing.setName(clientLead.getName());
+            if (clientLead.getCompany() != null) existing.setCompany(clientLead.getCompany());
+            if (clientLead.getEmail() != null) existing.setEmail(clientLead.getEmail());
+            if (clientLead.getAddress() != null) existing.setAddress(clientLead.getAddress());
+            if (clientLead.getAbn() != null) existing.setAbn(clientLead.getAbn());
+
+            // Save the new Phone and Tags fields!
+            if (clientLead.getPhone() != null) existing.setPhone(clientLead.getPhone());
+            if (clientLead.getTags() != null) existing.setTags(clientLead.getTags());
+
+            if (clientLead.getPipelineStage() != null) existing.setPipelineStage(clientLead.getPipelineStage());
             existing.setClient(clientLead.isClient());
 
             return clientLeadRepository.save(existing);
         }
-
-        // If it has no ID, it's a brand new lead
         clientLead.setAgencyId(agencyId);
         return clientLeadRepository.save(clientLead);
+    }
+
+    // --- NEW PROJECT & TASK CONTROLS ---
+    public Project updateProject(UUID projectId, String newName, String agencyId) {
+        Project project = projectRepository.findById(projectId).orElseThrow(() -> new RuntimeException("Project not found"));
+        if (!project.getAgencyId().equals(agencyId)) throw new RuntimeException("Unauthorized");
+        project.setName(newName);
+        return projectRepository.save(project);
+    }
+
+    public List<Task> getProjectTasks(UUID projectId, String agencyId) {
+        return taskRepository.findByAgencyIdAndProjectId(agencyId, projectId);
+    }
+
+    public Task updateTask(UUID taskId, Task taskUpdates, String agencyId) {
+        Task task = taskRepository.findById(taskId).orElseThrow(() -> new RuntimeException("Task not found"));
+        if (!task.getAgencyId().equals(agencyId)) throw new RuntimeException("Unauthorized");
+
+        if (taskUpdates.getTitle() != null) task.setTitle(taskUpdates.getTitle());
+        if (taskUpdates.getAssignee() != null) task.setAssignee(taskUpdates.getAssignee());
+        task.setCompleted(taskUpdates.isCompleted());
+
+        return taskRepository.save(task);
+    }
+
+    // --- NEW INVOICE STATUS CONTROL ---
+    public Invoice updateInvoiceStatus(UUID invoiceId, InvoiceStatus status, String agencyId) {
+        Invoice invoice = invoiceRepository.findById(invoiceId).orElseThrow(() -> new RuntimeException("Invoice not found"));
+        if (!invoice.getAgencyId().equals(agencyId)) throw new RuntimeException("Unauthorized");
+        invoice.setStatus(status);
+        return invoiceRepository.save(invoice);
     }
 
     // --- PROJECTS & TASKS ---

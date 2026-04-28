@@ -20,6 +20,8 @@ export interface ClientLead {
     name: string;
     company: string;
     email: string;
+    phone?: string;  // NEW
+    tags?: string;
     address?: string;
     abn?: string;
     pipelineStage: PipelineStage;
@@ -27,8 +29,7 @@ export interface ClientLead {
 }
 
 export interface Project { id?: string; name: string; status: string; }
-export interface Task { id?: string; title: string; completed: boolean; }
-
+export interface Task { id?: string; title: string; assignee?: string; completed: boolean; }
 export interface InvoiceItem {
     id?: string;
     description: string;
@@ -94,4 +95,27 @@ export const createInvoice = async (clientId: string, invoice: Invoice): Promise
     });
     if (!res.ok) throw new Error('Failed to create invoice');
     return res.json();
+};
+
+
+// Add these to the VERY BOTTOM of api.ts
+export const updateProject = async (projectId: string, project: Project): Promise<Project> => {
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(project) });
+    if (!res.ok) throw new Error('Failed to update project'); return res.json();
+};
+export const fetchProjectTasks = async (projectId: string): Promise<Task[]> => {
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/tasks`);
+    if (!res.ok) throw new Error('Failed to fetch tasks'); return res.json();
+};
+export const createTask = async (projectId: string, task: Task): Promise<Task> => {
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/tasks`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(task) });
+    if (!res.ok) throw new Error('Failed to create task'); return res.json();
+};
+export const updateTask = async (taskId: string, task: Task): Promise<Task> => {
+    const res = await fetch(`${API_BASE_URL}/tasks/${taskId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(task) });
+    if (!res.ok) throw new Error('Failed to update task'); return res.json();
+};
+export const updateInvoiceStatus = async (invoiceId: string, status: InvoiceStatus): Promise<Invoice> => {
+    const res = await fetch(`${API_BASE_URL}/invoices/${invoiceId}/status?status=${status}`, { method: 'PATCH' });
+    if (!res.ok) throw new Error('Failed to update status'); return res.json();
 };

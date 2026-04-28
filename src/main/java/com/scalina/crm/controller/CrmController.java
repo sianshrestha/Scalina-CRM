@@ -2,6 +2,7 @@ package com.scalina.crm.controller;
 
 import com.scalina.crm.dto.DashboardMetricsDTO;
 import com.scalina.crm.model.*;
+import com.scalina.crm.model.enums.InvoiceStatus;
 import com.scalina.crm.service.CrmService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -70,5 +71,26 @@ public class CrmController {
     @PostMapping("/clients/{clientId}/invoices")
     public ResponseEntity<Invoice> createInvoice(@PathVariable UUID clientId, @RequestBody Invoice invoice) {
         return ResponseEntity.ok(crmService.createInvoice(clientId, invoice, LOCAL_AGENCY_ID));
+    }
+
+    // --- NEW ENDPOINTS FOR FULL CONTROL ---
+    @PatchMapping("/projects/{projectId}")
+    public ResponseEntity<Project> updateProject(@PathVariable UUID projectId, @RequestBody Project project) {
+        return ResponseEntity.ok(crmService.updateProject(projectId, project.getName(), LOCAL_AGENCY_ID));
+    }
+
+    @GetMapping("/projects/{projectId}/tasks")
+    public ResponseEntity<List<Task>> getProjectTasks(@PathVariable UUID projectId) {
+        return ResponseEntity.ok(crmService.getProjectTasks(projectId, LOCAL_AGENCY_ID));
+    }
+
+    @PatchMapping("/tasks/{taskId}")
+    public ResponseEntity<Task> updateTask(@PathVariable UUID taskId, @RequestBody Task task) {
+        return ResponseEntity.ok(crmService.updateTask(taskId, task, LOCAL_AGENCY_ID));
+    }
+
+    @PatchMapping("/invoices/{invoiceId}/status")
+    public ResponseEntity<Invoice> updateInvoiceStatus(@PathVariable UUID invoiceId, @RequestParam InvoiceStatus status) {
+        return ResponseEntity.ok(crmService.updateInvoiceStatus(invoiceId, status, LOCAL_AGENCY_ID));
     }
 }

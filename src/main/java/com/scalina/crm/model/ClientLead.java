@@ -15,6 +15,10 @@ public class ClientLead extends BaseEntity{
     private String company;
     private String email;
 
+    // --- NEW FIELDS ---
+    private String phone;
+    private String tags;
+
     // Adding the fields needed for the Invoice PDF
     private String address;
     private String abn;

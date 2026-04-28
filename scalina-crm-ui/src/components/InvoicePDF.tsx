@@ -33,7 +33,7 @@ export const InvoiceDocument = ({ invoice, client }: any) => {
                         <Text style={styles.invoiceTitle}>INVOICE</Text>
                     </View>
                     <View>
-                        <Text><Text style={styles.boldText}>Client ID: </Text>{client.id?.substring(0, 8)}</Text>
+                        <Text><Text style={styles.boldText}>Client ID: </Text>{client.id}</Text>
                         <Text><Text style={styles.boldText}>Invoice No: </Text>{invoice.invoiceNo || '001'}</Text>
                         <Text><Text style={styles.boldText}>Invoice Date: </Text>{invoice.invoiceDate}</Text>
                     </View>
@@ -42,8 +42,8 @@ export const InvoiceDocument = ({ invoice, client }: any) => {
                 <View style={styles.section}>
                     <Text style={styles.boldText}>INVOICE TO :</Text>
                     <Text>{client.company}</Text>
-                    <Text>ABN: {client.abn || '84 648 143 588'}</Text>
-                    <Text>Address: {client.address || '350 Pitt Street, Sydney 2000'}</Text>
+                    <Text>ABN: {client.abn}</Text>
+                    <Text>Address: {client.address}</Text>
                 </View>
 
                 <View style={styles.table}>
@@ -76,8 +76,9 @@ export const InvoiceDocument = ({ invoice, client }: any) => {
 
                 <View style={styles.footer}>
                     <Text>info@scalinamedia.com</Text>
+                    <Text>  </Text>
                     <Text>ABN: 81821315775</Text>
-                    <Text style={{ marginTop: 10, fontWeight: 'bold' }}>Account Name: Suhan Shanker</Text>
+                    <Text>Account Name: Suhan Shanker</Text>
                     <Text>BSB: 062-235</Text>
                     <Text>Account Number: 11067512</Text>
                     <Text style={{ marginTop: 20, fontSize: 12, fontWeight: 'bold', textAlign: 'center' }}>THANK YOU!</Text>
