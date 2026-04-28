@@ -49,7 +49,24 @@ public class CrmService {
         return clientLeadRepository.findByAgencyId(agencyId);
     }
 
+    // 🔥 THIS IS THE FIXED METHOD 🔥
     public ClientLead saveClientLead(ClientLead clientLead, String agencyId) {
+        // If it already has an ID, it's an update from the Kanban board!
+        if (clientLead.getId() != null) {
+            ClientLead existing = clientLeadRepository.findById(clientLead.getId())
+                    .orElseThrow(() -> new RuntimeException("Lead not found"));
+
+            // Safely update only the necessary fields
+            existing.setName(clientLead.getName());
+            existing.setCompany(clientLead.getCompany());
+            existing.setEmail(clientLead.getEmail());
+            existing.setPipelineStage(clientLead.getPipelineStage());
+            existing.setClient(clientLead.isClient());
+
+            return clientLeadRepository.save(existing);
+        }
+
+        // If it has no ID, it's a brand new lead
         clientLead.setAgencyId(agencyId);
         return clientLeadRepository.save(clientLead);
     }
