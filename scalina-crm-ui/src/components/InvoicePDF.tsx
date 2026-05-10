@@ -33,7 +33,7 @@ export const InvoiceDocument = ({ invoice, client }: any) => {
                         <Text style={styles.invoiceTitle}>INVOICE</Text>
                     </View>
                     <View>
-                        <Text><Text style={styles.boldText}>Client ID: </Text>{client.id}</Text>
+                        <Text><Text style={styles.boldText}>Client ID: </Text>{client.clientIdCode}</Text>
                         <Text><Text style={styles.boldText}>Invoice No: </Text>{invoice.invoiceNo || '001'}</Text>
                         <Text><Text style={styles.boldText}>Invoice Date: </Text>{invoice.invoiceDate}</Text>
                     </View>

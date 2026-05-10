@@ -1,20 +1,20 @@
 package com.scalina.crm.repository;
 
-import com.scalina.crm.dto.FinancialMetrics;
 import com.scalina.crm.model.Invoice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.math.BigDecimal;
 import java.util.List;
-import java.util.UUID;
 
-public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
-    List<Invoice> findByAgencyIdAndClientId(String agencyId, UUID clientId);
+@Repository
+public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
+    List<Invoice> findByClientId(Long clientId);
 
-    @Query("SELECT " +
-            "SUM(i.amount) AS totalRevenue, " +
-            "SUM(i.amount - i.costOfDelivery) AS estimatedProfit " +
-            "FROM Invoice i " +
-            "WHERE i.agencyId = :agencyId AND i.status = 'PAID'")
-    FinancialMetrics getFinancialMetricsByAgency(@Param("agencyId") String agencyId);
+    @Query("SELECT COALESCE(SUM(i.amount), 0) FROM Invoice i WHERE i.status = 'PAID'")
+    BigDecimal getCollectedRevenue();
+
+    @Query("SELECT COALESCE(SUM(i.amount), 0) FROM Invoice i WHERE i.status IN ('SENT', 'DUE')")
+    BigDecimal getEstimatedRevenue();
 }

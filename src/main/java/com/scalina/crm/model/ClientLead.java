@@ -12,14 +12,14 @@ import lombok.Setter;
 public class ClientLead extends BaseEntity{
     private boolean isClient;
     private String name;
+
+    @Column(unique = true)
+    private String clientCode;
+
     private String company;
     private String email;
-
-    // --- NEW FIELDS ---
     private String phone;
     private String tags;
-
-    // Adding the fields needed for the Invoice PDF
     private String address;
     private String abn;
 

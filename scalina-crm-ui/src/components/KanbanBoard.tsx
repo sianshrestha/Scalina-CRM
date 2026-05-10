@@ -14,6 +14,7 @@ export default function KanbanBoard({ onSelectClient }: { onSelectClient: (clien
     const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
     const [showModal, setShowModal] = useState(false);
     const [newLead, setNewLead] = useState<Partial<ClientLead>>({ pipelineStage: PipelineStage.NEW });
+    const [clientIdSuffix, setClientIdSuffix] = useState(''); // State for the manual part of ID
 
     const loadLeads = () => fetchPipeline().then(setLeads).catch(console.error);
     useEffect(() => { loadLeads(); }, []);
@@ -32,14 +33,30 @@ export default function KanbanBoard({ onSelectClient }: { onSelectClient: (clien
         }
     };
 
-    const handleSaveNewLead = async () => {
+    const handleSaveLead = async () => {
         if (!newLead.company || !newLead.name) return alert("Company and Name are required!");
         try {
-            const saved = await saveClientLead({ ...newLead, client: false } as ClientLead);
-            setLeads(prev => [...prev, saved]);
-            setShowModal(false);
-            setNewLead({ pipelineStage: PipelineStage.NEW }); // Reset form
+            // Combine SM with the manual suffix
+            const customId = clientIdSuffix ? `SM${clientIdSuffix}` : undefined;
+            const payload = { ...newLead, clientIdCode: customId, client: newLead.pipelineStage === PipelineStage.ACTIVE };
+
+            await saveClientLead(payload as ClientLead);
+            loadLeads(); // Reload everything to ensure we have IDs
+            closeModal();
         } catch (error) { console.error(error); }
+    };
+
+    const openEditModal = (lead: ClientLead) => {
+        setNewLead(lead);
+        // Strip out 'SM' to just show the user their manual input
+        setClientIdSuffix(lead.clientIdCode ? lead.clientIdCode.replace('SM', '') : '');
+        setShowModal(true);
+    };
+
+    const closeModal = () => {
+        setShowModal(false);
+        setNewLead({ pipelineStage: PipelineStage.NEW });
+        setClientIdSuffix('');
     };
 
     // Auto-calculate next invoice date as the 1st of next month for MVP
@@ -69,9 +86,18 @@ export default function KanbanBoard({ onSelectClient }: { onSelectClient: (clien
                             <h3 className="font-semibold text-gray-700 mb-4">{stage.title}</h3>
                             <div className="flex flex-col gap-3 min-h-[200px]">
                                 {leads.filter(l => l.pipelineStage === stage.id).map(lead => (
-                                    <div key={lead.id} draggable onDragStart={e => handleDragStart(e, lead.id!)} className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 cursor-grab hover:shadow-md flex flex-col gap-2 relative">
+                                    <div key={lead.id} draggable onDragStart={e => handleDragStart(e, lead.id!)} className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 cursor-grab hover:shadow-md flex flex-col gap-2 relative group">
+
+                                        {/* EDIT BUTTON (Visible on hover) */}
+                                        <button onClick={() => openEditModal(lead)} className="absolute top-2 right-2 text-gray-400 hover:text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity text-xs cursor-pointer">
+                                            ✎ Edit
+                                        </button>
+
                                         <div>
-                                            <h4 className="font-bold text-gray-800">{lead.company}</h4>
+                                            <h4 className="font-bold text-gray-800">
+                                                {lead.clientIdCode && <span className="text-xs text-indigo-600 mr-2 border border-indigo-200 bg-indigo-50 px-1 rounded">{lead.clientIdCode}</span>}
+                                                {lead.company}
+                                            </h4>
                                             <p className="text-sm text-gray-500">{lead.name}</p>
                                         </div>
                                         {lead.tags && <div className="flex flex-wrap gap-1 mt-1">{lead.tags.split(',').map(tag => <span key={tag} className="text-[10px] bg-gray-100 px-1 rounded text-gray-600">{tag.trim()}</span>)}</div>}
@@ -108,21 +134,43 @@ export default function KanbanBoard({ onSelectClient }: { onSelectClient: (clien
                 </div>
             )}
 
-            {/* ADD LEAD MODAL */}
+            {/* ADD / EDIT LEAD MODAL */}
             {showModal && (
                 <div className="fixed inset-0 bg-black/50 flex justify-center items-center p-4 z-50">
-                    <div className="bg-white p-6 rounded-xl w-full max-w-lg shadow-2xl">
-                        <h3 className="text-2xl font-bold mb-4">Add New Lead</h3>
+                    <div className="bg-white p-6 rounded-xl w-full max-w-2xl shadow-2xl">
+                        <h3 className="text-2xl font-bold mb-4">{newLead.id ? 'Edit Lead/Client' : 'Add New Lead'}</h3>
                         <div className="grid grid-cols-2 gap-4 mb-4">
+                            {/* Client ID Input */}
+                            <div className="col-span-2 flex items-center border rounded overflow-hidden">
+                                <span className="bg-gray-100 px-4 py-2 font-bold text-gray-600 border-r">SM</span>
+                                <input className="p-2 flex-grow outline-none" placeholder="Client ID Suffix (e.g. ML01)" value={clientIdSuffix} onChange={e => setClientIdSuffix(e.target.value.toUpperCase())} />
+                            </div>
+
                             <input className="border p-2 rounded" placeholder="Company Name *" value={newLead.company || ''} onChange={e => setNewLead({...newLead, company: e.target.value})} />
                             <input className="border p-2 rounded" placeholder="Contact Name *" value={newLead.name || ''} onChange={e => setNewLead({...newLead, name: e.target.value})} />
                             <input className="border p-2 rounded" placeholder="Email" value={newLead.email || ''} onChange={e => setNewLead({...newLead, email: e.target.value})} />
                             <input className="border p-2 rounded" placeholder="Phone" value={newLead.phone || ''} onChange={e => setNewLead({...newLead, phone: e.target.value})} />
-                            <input className="border p-2 rounded col-span-2" placeholder="Tags (comma separated e.g. VIP, Retail)" value={newLead.tags || ''} onChange={e => setNewLead({...newLead, tags: e.target.value})} />
+
+                            {/* NEW EFFORT TYPE DROPDOWN */}
+                            <div className="col-span-2">
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Work Effort Type (For Payroll)</label>
+                                <select
+                                    className="border p-2 rounded w-full bg-blue-50 cursor-pointer"
+                                    value={newLead.effortType || 1.0}
+                                    onChange={e => setNewLead({...newLead, effortType: parseFloat(e.target.value)})}
+                                >
+                                    <option value={1.0}>Type 1 (Full Effort)</option>
+                                    <option value={0.5}>Type 0.5 (Half Effort)</option>
+                                </select>
+                            </div>
+
+                            <input className="border p-2 rounded col-span-2" placeholder="Address" value={newLead.address || ''} onChange={e => setNewLead({...newLead, address: e.target.value})} />
+                            <input className="border p-2 rounded" placeholder="ABN" value={newLead.abn || ''} onChange={e => setNewLead({...newLead, abn: e.target.value})} />
+                            <input className="border p-2 rounded" placeholder="Tags (comma separated)" value={newLead.tags || ''} onChange={e => setNewLead({...newLead, tags: e.target.value})} />
                         </div>
                         <div className="flex gap-2 justify-end">
-                            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">Cancel</button>
-                            <button onClick={handleSaveNewLead} className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Save Lead</button>
+                            <button onClick={closeModal} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded cursor-pointer">Cancel</button>
+                            <button onClick={handleSaveLead} className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 cursor-pointer">Save Lead</button>
                         </div>
                     </div>
                 </div>

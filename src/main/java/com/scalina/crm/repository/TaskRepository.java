@@ -1,10 +1,19 @@
 package com.scalina.crm.repository;
 
 import com.scalina.crm.model.Task;
+import com.scalina.crm.model.enums.TaskType;
 import org.springframework.data.jpa.repository.JpaRepository;
-import java.util.List;
-import java.util.UUID;
+import org.springframework.stereotype.Repository;
 
-public interface TaskRepository extends JpaRepository<Task, UUID> {
-    List<Task> findByAgencyIdAndProjectId(String agencyId, UUID projectId);
+import java.util.List;
+
+@Repository
+public interface TaskRepository extends JpaRepository<Task, Long> {
+
+    List<Task> findByProjectId(Long projectId);
+
+    List<Task> findByAssignee(String assignee);
+
+    List<Task> findByTaskType(TaskType taskType);
+
 }

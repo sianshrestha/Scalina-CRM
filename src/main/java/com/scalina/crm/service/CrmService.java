@@ -1,7 +1,6 @@
 package com.scalina.crm.service;
 
 import com.scalina.crm.dto.DashboardMetricsDTO;
-import com.scalina.crm.dto.FinancialMetrics;
 import com.scalina.crm.model.*;
 import com.scalina.crm.model.enums.InvoiceStatus;
 import com.scalina.crm.model.enums.PipelineStage;
@@ -11,7 +10,6 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 public class CrmService {
@@ -20,38 +18,53 @@ public class CrmService {
     private final ProjectRepository projectRepository;
     private final TaskRepository taskRepository;
     private final InvoiceRepository invoiceRepository;
+    private final TeamMemberRepository teamMemberRepository;
+    private final WorkAssignmentRepository workAssignmentRepository;
+    private final ExpenseRepository expenseRepository;
 
     public CrmService(ClientLeadRepository clientLeadRepository, ProjectRepository projectRepository,
-                      TaskRepository taskRepository, InvoiceRepository invoiceRepository) {
+                      TaskRepository taskRepository, InvoiceRepository invoiceRepository,
+                      TeamMemberRepository teamMemberRepository, WorkAssignmentRepository workAssignmentRepository,
+                      ExpenseRepository expenseRepository) {
         this.clientLeadRepository = clientLeadRepository;
         this.projectRepository = projectRepository;
         this.taskRepository = taskRepository;
         this.invoiceRepository = invoiceRepository;
+        this.teamMemberRepository = teamMemberRepository;
+        this.workAssignmentRepository = workAssignmentRepository;
+        this.expenseRepository = expenseRepository;
     }
 
     // --- DASHBOARD ---
-    public DashboardMetricsDTO getDashboardMetrics(String agencyId) {
-        long activeClients = clientLeadRepository.countByAgencyIdAndPipelineStage(agencyId, PipelineStage.ACTIVE);
-        long coldWarmLeads = clientLeadRepository.countByAgencyIdAndPipelineStageIn(
-                agencyId, Arrays.asList(PipelineStage.NEW, PipelineStage.CONTACTED));
-        long hotLeads = clientLeadRepository.countByAgencyIdAndPipelineStage(agencyId, PipelineStage.PROPOSAL_SENT);
+    public DashboardMetricsDTO getDashboardMetrics() {
+        long activeClients = clientLeadRepository.countByPipelineStage(PipelineStage.ACTIVE);
+        long coldWarmLeads = clientLeadRepository.countByPipelineStageIn(
+                Arrays.asList(PipelineStage.NEW, PipelineStage.CONTACTED));
+        long hotLeads = clientLeadRepository.countByPipelineStage(PipelineStage.PROPOSAL_SENT);
 
-        FinancialMetrics financials = invoiceRepository.getFinancialMetricsByAgency(agencyId);
+        BigDecimal collectedRevenue = invoiceRepository.getCollectedRevenue();
+        BigDecimal estimatedRevenue = invoiceRepository.getEstimatedRevenue();
+
+        BigDecimal totalVariableCosts = workAssignmentRepository.getTotalVariableCosts();
+        BigDecimal totalFixedExpenses = expenseRepository.getTotalExpenses();
+        BigDecimal totalCosts = totalVariableCosts.add(totalFixedExpenses);
+
+        BigDecimal estimatedProfit = collectedRevenue.subtract(totalCosts);
 
         return new DashboardMetricsDTO(
                 activeClients, coldWarmLeads, hotLeads,
-                financials != null ? financials.getTotalRevenue() : null,
-                financials != null ? financials.getEstimatedProfit() : null
+                collectedRevenue,
+                estimatedRevenue,
+                estimatedProfit
         );
     }
 
     // --- PIPELINE (LEADS & CLIENTS) ---
-    public List<ClientLead> getAllLeadsAndClients(String agencyId) {
-        return clientLeadRepository.findByAgencyId(agencyId);
+    public List<ClientLead> getAllLeadsAndClients() {
+        return clientLeadRepository.findAll();
     }
 
-    // 🔥 UPDATED SAVE METHOD 🔥
-    public ClientLead saveClientLead(ClientLead clientLead, String agencyId) {
+    public ClientLead saveClientLead(ClientLead clientLead) {
         if (clientLead.getId() != null) {
             ClientLead existing = clientLeadRepository.findById(clientLead.getId())
                     .orElseThrow(() -> new RuntimeException("Lead not found"));
@@ -61,97 +74,48 @@ public class CrmService {
             if (clientLead.getEmail() != null) existing.setEmail(clientLead.getEmail());
             if (clientLead.getAddress() != null) existing.setAddress(clientLead.getAddress());
             if (clientLead.getAbn() != null) existing.setAbn(clientLead.getAbn());
-
-            // Save the new Phone and Tags fields!
             if (clientLead.getPhone() != null) existing.setPhone(clientLead.getPhone());
             if (clientLead.getTags() != null) existing.setTags(clientLead.getTags());
-
+            if (clientLead.getClientCode() != null) existing.setClientCode(clientLead.getClientCode());
             if (clientLead.getPipelineStage() != null) existing.setPipelineStage(clientLead.getPipelineStage());
             existing.setClient(clientLead.isClient());
 
             return clientLeadRepository.save(existing);
         }
-        clientLead.setAgencyId(agencyId);
+
         return clientLeadRepository.save(clientLead);
     }
 
-    // --- NEW PROJECT & TASK CONTROLS ---
-    public Project updateProject(UUID projectId, String newName, String agencyId) {
-        Project project = projectRepository.findById(projectId).orElseThrow(() -> new RuntimeException("Project not found"));
-        if (!project.getAgencyId().equals(agencyId)) throw new RuntimeException("Unauthorized");
-        project.setName(newName);
-        return projectRepository.save(project);
+    // --- PROJECTS & TASKS (READ-ONLY) ---
+    public List<Project> getClientProjects(Long clientId) {
+        return projectRepository.findByClientId(clientId);
     }
 
-    public List<Task> getProjectTasks(UUID projectId, String agencyId) {
-        return taskRepository.findByAgencyIdAndProjectId(agencyId, projectId);
+    public List<Task> getProjectTasks(Long projectId) {
+        return taskRepository.findByProjectId(projectId);
     }
 
-    public Task updateTask(UUID taskId, Task taskUpdates, String agencyId) {
-        Task task = taskRepository.findById(taskId).orElseThrow(() -> new RuntimeException("Task not found"));
-        if (!task.getAgencyId().equals(agencyId)) throw new RuntimeException("Unauthorized");
-
-        if (taskUpdates.getTitle() != null) task.setTitle(taskUpdates.getTitle());
-        if (taskUpdates.getAssignee() != null) task.setAssignee(taskUpdates.getAssignee());
-        task.setCompleted(taskUpdates.isCompleted());
-
-        return taskRepository.save(task);
+    // --- INVOICING ---
+    public List<Invoice> getClientInvoices(Long clientId) {
+        return invoiceRepository.findByClientId(clientId);
     }
 
-    // --- NEW INVOICE STATUS CONTROL ---
-    public Invoice updateInvoiceStatus(UUID invoiceId, InvoiceStatus status, String agencyId) {
+    public Invoice updateInvoiceStatus(Long invoiceId, InvoiceStatus status) {
         Invoice invoice = invoiceRepository.findById(invoiceId).orElseThrow(() -> new RuntimeException("Invoice not found"));
-        if (!invoice.getAgencyId().equals(agencyId)) throw new RuntimeException("Unauthorized");
         invoice.setStatus(status);
         return invoiceRepository.save(invoice);
     }
 
-    // --- PROJECTS & TASKS ---
-    public List<Project> getClientProjects(UUID clientId, String agencyId) {
-        return projectRepository.findByAgencyIdAndClientId(agencyId, clientId);
-    }
-
-    public Project createProject(UUID clientId, Project project, String agencyId) {
-        ClientLead client = clientLeadRepository.findById(clientId).orElseThrow(() -> new RuntimeException("Client not found"));
-        project.setClient(client);
-        project.setAgencyId(agencyId);
-        return projectRepository.save(project);
-    }
-
-    public Task createTask(UUID projectId, Task task, String agencyId) {
-        Project project = projectRepository.findById(projectId).orElseThrow(() -> new RuntimeException("Project not found"));
-        task.setProject(project);
-        task.setAgencyId(agencyId);
-        task.setCompleted(false);
-        return taskRepository.save(task);
-    }
-
-    public Task markTaskCompleted(UUID taskId, String agencyId) {
-        Task task = taskRepository.findById(taskId).orElseThrow(() -> new RuntimeException("Task not found"));
-        if (!task.getAgencyId().equals(agencyId)) throw new RuntimeException("Unauthorized");
-        task.setCompleted(true);
-        return taskRepository.save(task);
-    }
-
-    // --- INVOICING ---
-    public List<Invoice> getClientInvoices(UUID clientId, String agencyId) {
-        return invoiceRepository.findByAgencyIdAndClientId(agencyId, clientId);
-    }
-
-    public Invoice createInvoice(UUID clientId, Invoice invoice, String agencyId) {
+    public Invoice createInvoice(Long clientId, Invoice invoice) {
         ClientLead client = clientLeadRepository.findById(clientId).orElseThrow(() -> new RuntimeException("Client not found"));
         invoice.setClient(client);
-        invoice.setAgencyId(agencyId);
 
         BigDecimal grandTotal = BigDecimal.ZERO;
 
-        // Ensure all line items are linked properly and calculate the grand total
         if (invoice.getItems() != null) {
             for (InvoiceItem item : invoice.getItems()) {
-                item.setAgencyId(agencyId); // Every entity needs the agencyId!
                 item.setInvoice(invoice);
 
-                // Calculate item total: price * quantity
                 if (item.getPrice() != null) {
                     BigDecimal itemTotal = item.getPrice().multiply(new BigDecimal(item.getQuantity()));
                     item.setTotal(itemTotal);
@@ -160,9 +124,41 @@ public class CrmService {
             }
         }
 
-        // Set the final calculated total to the invoice amount
         invoice.setAmount(grandTotal);
-
         return invoiceRepository.save(invoice);
+    }
+
+    // --- RESOURCE MANAGEMENT (TEAM & CALENDAR) ---
+    public List<TeamMember> getTeamMembers() {
+        return teamMemberRepository.findAll();
+    }
+
+    public TeamMember createTeamMember(TeamMember member) {
+        return teamMemberRepository.save(member);
+    }
+
+    public List<WorkAssignment> getWorkAssignments() {
+        return workAssignmentRepository.findAll();
+    }
+
+    public WorkAssignment createWorkAssignment(WorkAssignment assignment, Long teamMemberId, Long clientId) {
+        TeamMember member = teamMemberRepository.findById(teamMemberId)
+                .orElseThrow(() -> new RuntimeException("Team member not found"));
+        ClientLead client = clientLeadRepository.findById(clientId)
+                .orElseThrow(() -> new RuntimeException("Client not found"));
+
+        assignment.setTeamMember(member);
+        assignment.setClient(client);
+
+        return workAssignmentRepository.save(assignment);
+    }
+
+    // --- EXPENSES ---
+    public List<Expense> getExpenses() {
+        return expenseRepository.findAll();
+    }
+
+    public Expense createExpense(Expense expense) {
+        return expenseRepository.save(expense);
     }
 }
