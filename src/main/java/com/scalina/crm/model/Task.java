@@ -1,5 +1,6 @@
 package com.scalina.crm.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.scalina.crm.model.enums.TaskType;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -14,6 +15,7 @@ public class Task extends BaseEntity {
 
     private String title;
 
+    @JsonIgnoreProperties({"tasks", "client"})
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;

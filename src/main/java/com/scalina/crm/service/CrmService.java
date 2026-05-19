@@ -6,6 +6,7 @@ import com.scalina.crm.model.enums.InvoiceStatus;
 import com.scalina.crm.model.enums.PipelineStage;
 import com.scalina.crm.repository.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
@@ -21,6 +22,9 @@ public class CrmService {
     private final TeamMemberRepository teamMemberRepository;
     private final WorkAssignmentRepository workAssignmentRepository;
     private final ExpenseRepository expenseRepository;
+
+    public List<Project> getAllProjects() { return projectRepository.findAll(); }
+    public List<Task> getAllTasks() { return taskRepository.findAll(); }
 
     public CrmService(ClientLeadRepository clientLeadRepository, ProjectRepository projectRepository,
                       TaskRepository taskRepository, InvoiceRepository invoiceRepository,
@@ -77,12 +81,20 @@ public class CrmService {
             if (clientLead.getPhone() != null) existing.setPhone(clientLead.getPhone());
             if (clientLead.getTags() != null) existing.setTags(clientLead.getTags());
             if (clientLead.getClientCode() != null) existing.setClientCode(clientLead.getClientCode());
-            if (clientLead.getPipelineStage() != null) existing.setPipelineStage(clientLead.getPipelineStage());
-            existing.setClient(clientLead.isClient());
+
+            if (clientLead.getPipelineStage() != null) {
+                existing.setPipelineStage(clientLead.getPipelineStage());
+                // FIX: Automatically sync the isClient boolean with the PipelineStage
+                existing.setClient(clientLead.getPipelineStage() == PipelineStage.ACTIVE);
+            }
 
             return clientLeadRepository.save(existing);
         }
 
+        // For brand new leads:
+        if (clientLead.getPipelineStage() != null) {
+            clientLead.setClient(clientLead.getPipelineStage() == PipelineStage.ACTIVE);
+        }
         return clientLeadRepository.save(clientLead);
     }
 
@@ -134,7 +146,52 @@ public class CrmService {
     }
 
     public TeamMember createTeamMember(TeamMember member) {
+        if (member.getName() == null || member.getName().isBlank()) {
+            String fullName = ((member.getFirstName() == null ? "" : member.getFirstName()) + " " +
+                    (member.getLastName() == null ? "" : member.getLastName())).trim();
+            member.setName(fullName);
+        }
+
         return teamMemberRepository.save(member);
+    }
+
+    public TeamMember updateTeamMember(Long id, TeamMember details) {
+        TeamMember member = teamMemberRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Team member not found"));
+
+        member.setRole(details.getRole());
+        member.setFirstName(details.getFirstName());
+        member.setLastName(details.getLastName());
+        member.setDob(details.getDob());
+        member.setNationality(details.getNationality());
+        member.setPersonalEmail(details.getPersonalEmail());
+        member.setPhoneNumber(details.getPhoneNumber());
+        member.setResidentialCountry(details.getResidentialCountry());
+        member.setResidentialState(details.getResidentialState());
+        member.setStreetAddress(details.getStreetAddress());
+        member.setPostcode(details.getPostcode());
+        member.setBankCountry(details.getBankCountry());
+        member.setBankName(details.getBankName());
+        member.setAccountName(details.getAccountName());
+        member.setBsb(details.getBsb());
+        member.setAccountNumber(details.getAccountNumber());
+        member.setAccountPhoneNumber(details.getAccountPhoneNumber());
+        member.setEmergencyContactName(details.getEmergencyContactName());
+        member.setEmergencyContactNumber(details.getEmergencyContactNumber());
+
+        String fullName = ((details.getFirstName() == null ? "" : details.getFirstName()) + " " +
+                (details.getLastName() == null ? "" : details.getLastName())).trim();
+        member.setName(fullName);
+
+        return teamMemberRepository.save(member);
+    }
+
+    @Transactional
+    public void deleteTeamMember(Long id) {
+        TeamMember member = teamMemberRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Team member not found"));
+        workAssignmentRepository.deleteByTeamMemberId(id);
+        teamMemberRepository.delete(member);
     }
 
     public List<WorkAssignment> getWorkAssignments() {

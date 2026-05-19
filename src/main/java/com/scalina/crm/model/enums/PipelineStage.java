@@ -4,5 +4,6 @@ public enum PipelineStage {
     NEW,
     CONTACTED,
     PROPOSAL_SENT,
-    ACTIVE
+    ACTIVE,
+    INACTIVE
 }

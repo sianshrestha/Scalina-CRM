@@ -42,6 +42,11 @@ public class CrmController {
 
     // --- PROJECTS & TASKS API (ERP INTEGRATED) ---
 
+    @GetMapping("/projects")
+    public ResponseEntity<List<Project>> getAllProjects() {
+        return ResponseEntity.ok(crmService.getAllProjects());
+    }
+
     @PostMapping("/projects")
     public ResponseEntity<Project> createProject(@RequestBody ProjectCreationRequest request) {
         Project createdProject = projectService.createWeeklyProject(
@@ -51,6 +56,18 @@ public class CrmController {
                 request.getDeadline()
         );
         return ResponseEntity.ok(createdProject);
+    }
+
+    @PutMapping("/projects/{projectId}")
+    public ResponseEntity<Project> updateProject(@PathVariable Long projectId, @RequestBody ProjectCreationRequest request) {
+        Project updatedProject = projectService.updateWeeklyProject(
+                projectId,
+                request.getClientId(),
+                request.getWeekCode(),
+                request.getNumberOfVideos(),
+                request.getDeadline()
+        );
+        return ResponseEntity.ok(updatedProject);
     }
 
     @GetMapping("/clients/{clientId}/projects")
@@ -80,6 +97,22 @@ public class CrmController {
         return ResponseEntity.ok(completedTask);
     }
 
+    @GetMapping("/tasks")
+    public ResponseEntity<List<Task>> getAllTasks() {
+        return ResponseEntity.ok(crmService.getAllTasks());
+    }
+
+    @PatchMapping("/tasks/{taskId}/date")
+    public ResponseEntity<Task> updateTaskDate(@PathVariable Long taskId, @RequestParam String newDate) {
+        return ResponseEntity.ok(taskService.updateTaskDate(taskId, java.time.LocalDate.parse(newDate)));
+    }
+
+    @DeleteMapping("/tasks/{taskId}")
+    public ResponseEntity<Void> deleteTask(@PathVariable Long taskId) {
+        taskService.deleteTask(taskId);
+        return ResponseEntity.noContent().build();
+    }
+
     // --- INVOICES API ---
     @GetMapping("/clients/{clientId}/invoices")
     public ResponseEntity<List<Invoice>> getClientInvoices(@PathVariable Long clientId) {
@@ -105,6 +138,17 @@ public class CrmController {
     @PostMapping("/team")
     public ResponseEntity<TeamMember> createTeamMember(@RequestBody TeamMember member) {
         return ResponseEntity.ok(crmService.createTeamMember(member));
+    }
+
+    @PutMapping("/team/{teamMemberId}")
+    public ResponseEntity<TeamMember> updateTeamMember(@PathVariable Long teamMemberId, @RequestBody TeamMember member) {
+        return ResponseEntity.ok(crmService.updateTeamMember(teamMemberId, member));
+    }
+
+    @DeleteMapping("/team/{teamMemberId}")
+    public ResponseEntity<Void> deleteTeamMember(@PathVariable Long teamMemberId) {
+        crmService.deleteTeamMember(teamMemberId);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/assignments")

@@ -1,23 +1,16 @@
-
-const API_BASE_URL = 'http://localhost:8080/api/v1/crm';
-
-// --- TYPES ---
-export interface DashboardMetrics {
-    activeClients: number;
-    coldWarmLeads: number;
-    hotLeads: number;
-    totalRevenue: number;
-    estimatedProfit: number;
-}
+// src/services/api.ts
+const API_BASE_URL = 'http://localhost:8080/api/crm';
 
 // @ts-ignore
-export enum PipelineStage { NEW = 'NEW', CONTACTED = 'CONTACTED', PROPOSAL_SENT = 'PROPOSAL_SENT', ACTIVE = 'ACTIVE' }
+export enum PipelineStage { NEW = 'NEW', CONTACTED = 'CONTACTED', PROPOSAL_SENT = 'PROPOSAL_SENT', ACTIVE = 'ACTIVE' , INACTIVE = 'INACTIVE' }
 // @ts-ignore
 export enum InvoiceStatus { DRAFT = 'DRAFT', DUE = 'DUE', PAID = 'PAID', OVERDUE = 'OVERDUE' }
+// @ts-ignore
+export enum TaskType { SCRIPT = 'SCRIPT', SHOOT = 'SHOOT', EDIT = 'EDIT' }
 
 export interface ClientLead {
-    id?: string;
-    clientIdCode?: string;
+    id?: number;
+    clientCode?: string;
     name: string;
     company: string;
     email: string;
@@ -25,157 +18,185 @@ export interface ClientLead {
     tags?: string;
     address?: string;
     abn?: string;
-    effortType?: number;
     pipelineStage: PipelineStage;
     client: boolean;
 }
 
-export interface Project { id?: string; name: string; status: string; }
-export interface Task { id?: string; title: string; assignee?: string; completed: boolean; }
+export interface Project {
+    id?: number;
+    projectCode: string;
+    weekCode: string;
+    numberOfVideos: number;
+    scriptStatus: string;
+    shootStatus: string;
+    overallEditStatus: string;
+    overallProjectStatus: string;
+    projectDeadline?: string;
+    client?: ClientLead;
+}
+
+export interface Task {
+    id?: number;
+    title: string;
+    taskType: TaskType;
+    assignee: string;
+    videoNumber?: number;
+    taskDate: string;
+    completed: boolean;
+    project?: Project;
+}
+
+export interface TeamMember {
+    id?: number;
+    name?: string;
+    role: string;
+    firstName?: string;
+    lastName?: string;
+    dob?: string;
+    nationality?: string;
+    personalEmail?: string;
+    phoneNumber?: string;
+    residentialCountry?: string;
+    residentialState?: string;
+    streetAddress?: string;
+    postcode?: string;
+    bankCountry?: string;
+    bankName?: string;
+    accountName?: string;
+    bsb?: string;
+    accountNumber?: string;
+    accountPhoneNumber?: string;
+    emergencyContactName?: string;
+    emergencyContactNumber?: string;
+}
+
+export interface DashboardMetrics {
+    totalLeads?: number;
+    activeClients?: number;
+    activeProjects?: number;
+    pendingTasks?: number;
+    completedTasks?: number;
+    totalRevenue?: number;
+    [key: string]: any;
+}
+
+// --- ACTUAL API CALLS ---
+const fetcher = async (url: string, options?: RequestInit) => {
+    const res = await fetch(`${API_BASE_URL}${url}`, options);
+    if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || `API Error: ${res.status} ${res.statusText}`);
+    }
+    if (res.status === 204) return null;
+
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+};
+
+export const fetchDashboardMetrics = () => fetcher('/dashboard');
+export const fetchPipeline = () => fetcher('/pipeline');
+export const saveClientLead = (lead: ClientLead) => fetcher('/pipeline', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lead) });
+
+export const fetchClientProjects = (clientId: number) => fetcher(`/clients/${clientId}/projects`);
+export const fetchAllProjects = () => fetcher('/projects');
+export const createProject = (projectReq: any) => fetcher('/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(projectReq) });
+export const updateProject = (projectId: number, projectReq: any) => fetcher(`/projects/${projectId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(projectReq) });
+export const cancelProject = (projectId: number) => fetcher(`/projects/${projectId}/cancel`, { method: 'PUT' });
+
+export const fetchAllTasks = () => fetcher('/tasks');
+export const fetchProjectTasks = (projectId: number) => fetcher(`/projects/${projectId}/tasks`);
+export const assignTask = (projectId: number, task: Task) => fetcher(`/projects/${projectId}/tasks`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(task) });
+export const markTaskAsDone = (taskId: number) => fetcher(`/tasks/${taskId}/done`, { method: 'PUT' });
+export const updateTaskDate = (taskId: number, newDate: string) => fetcher(`/tasks/${taskId}/date?newDate=${newDate}`, { method: 'PATCH' });
+export const fetchTeamMembers = () => fetcher('/team');
+export const updateTeamMember = (id: number, member: TeamMember) => fetcher(`/team/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(member) });
+
+
+// ==========================================
+// TEMPORARY IN-MEMORY MOCK APIS
+// (Replace these with standard fetcher calls once Spring Boot is ready)
+// ==========================================
+
 export interface InvoiceItem {
-    id?: string;
     description: string;
     quantity: number;
     price: number;
-    total?: number;
 }
 
 export interface Invoice {
-    id?: string;
-    invoiceNo: string;
-    invoiceDate: string;
-    amount?: number;
-    costOfDelivery: number;
-    status: InvoiceStatus;
-    items: InvoiceItem[];
-}
-
-// --- API CALLS ---
-export const fetchDashboardMetrics = async (): Promise<DashboardMetrics> => {
-    const res = await fetch(`${API_BASE_URL}/dashboard`);
-    if (!res.ok) throw new Error('Failed to fetch dashboard');
-    return res.json();
-};
-
-export const fetchPipeline = async (): Promise<ClientLead[]> => {
-    const res = await fetch(`${API_BASE_URL}/pipeline`);
-    if (!res.ok) throw new Error('Failed to fetch pipeline');
-    return res.json();
-};
-
-export const saveClientLead = async (lead: ClientLead): Promise<ClientLead> => {
-    const res = await fetch(`${API_BASE_URL}/pipeline`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lead),
-    });
-    if (!res.ok) throw new Error('Failed to save lead');
-    return res.json();
-};
-
-export const fetchClientProjects = async (clientId: string): Promise<Project[]> => {
-    const res = await fetch(`${API_BASE_URL}/clients/${clientId}/projects`);
-    if (!res.ok) throw new Error('Failed to fetch projects');
-    return res.json();
-};
-
-export const createProject = async (clientId: string, project: Project): Promise<Project> => {
-    const res = await fetch(`${API_BASE_URL}/clients/${clientId}/projects`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(project),
-    });
-    if (!res.ok) throw new Error('Failed to create project');
-    return res.json();
-};
-
-export const fetchClientInvoices = async (clientId: string): Promise<Invoice[]> => {
-    const res = await fetch(`${API_BASE_URL}/clients/${clientId}/invoices`);
-    if (!res.ok) throw new Error('Failed to fetch invoices');
-    return res.json();
-};
-
-export const createInvoice = async (clientId: string, invoice: Invoice): Promise<Invoice> => {
-    const res = await fetch(`${API_BASE_URL}/clients/${clientId}/invoices`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice),
-    });
-    if (!res.ok) throw new Error('Failed to create invoice');
-    return res.json();
-};
-
-
-// Add these to the VERY BOTTOM of api.ts
-export const updateProject = async (projectId: string, project: Project): Promise<Project> => {
-    const res = await fetch(`${API_BASE_URL}/projects/${projectId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(project) });
-    if (!res.ok) throw new Error('Failed to update project'); return res.json();
-};
-export const fetchProjectTasks = async (projectId: string): Promise<Task[]> => {
-    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/tasks`);
-    if (!res.ok) throw new Error('Failed to fetch tasks'); return res.json();
-};
-export const createTask = async (projectId: string, task: Task): Promise<Task> => {
-    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/tasks`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(task) });
-    if (!res.ok) throw new Error('Failed to create task'); return res.json();
-};
-export const updateTask = async (taskId: string, task: Task): Promise<Task> => {
-    const res = await fetch(`${API_BASE_URL}/tasks/${taskId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(task) });
-    if (!res.ok) throw new Error('Failed to update task'); return res.json();
-};
-export const updateInvoiceStatus = async (invoiceId: string, status: InvoiceStatus): Promise<Invoice> => {
-    const res = await fetch(`${API_BASE_URL}/invoices/${invoiceId}/status?status=${status}`, { method: 'PATCH' });
-    if (!res.ok) throw new Error('Failed to update status'); return res.json();
-};
-
-// --- NEW TYPES FOR ERP FEATURES ---
-
-export interface TeamMember {
-    id?: string;
-    name: string;
-    role: string;
-}
-
-export interface WorkAssignment {
-    id?: string;
-    teamMember: TeamMember;
-    client: ClientLead;
-    workDate: string;
-    calculatedCost?: number;
+    id?: number;
+    invoiceNumber: string;
+    clientId: number;
+    clientName?: string;
+    projectId?: number;
+    projectCode?: string;
+    amount: number;
+    issueDate: string;
+    dueDate: string;
+    status: 'DRAFT' | 'SENT' | 'PAID' | 'OVERDUE';
+    items?: InvoiceItem[]; // Added for line items
 }
 
 export interface Expense {
-    id?: string;
+    id?: number;
     title: string;
+    type: string;
+    payee?: string;
     amount: number;
     expenseDate: string;
-    category: string;
+    isPaid: boolean;
+    isRecurring?: boolean;
+    reference?: string;
+    receiptUrl?: string;
 }
 
-// --- NEW API CALLS FOR ERP FEATURES ---
+// In-Memory Databases
+let mockInvoices: Invoice[] = [];
+let mockExpenses: Expense[] = [];
+let invoiceIdCounter = 1;
+let expenseIdCounter = 1;
 
-export const fetchTeamMembers = async (): Promise<TeamMember[]> => {
-    const res = await fetch(`${API_BASE_URL}/team`);
-    if (!res.ok) throw new Error('Failed to fetch team'); return res.json();
+// Invoice Mocks
+export const fetchInvoices = async (): Promise<Invoice[]> => {
+    return [...mockInvoices];
+};
+export const createInvoice = async (invoice: Partial<Invoice>) => {
+    const newInvoice = { ...invoice, id: invoiceIdCounter++ } as Invoice;
+    mockInvoices.push(newInvoice);
+    return newInvoice;
+};
+export const updateInvoiceStatus = async (id: number, status: string) => {
+    const inv = mockInvoices.find(i => i.id === id);
+    if (inv) inv.status = status as 'DRAFT' | 'SENT' | 'PAID' | 'OVERDUE';
 };
 
-export const createTeamMember = async (member: TeamMember): Promise<TeamMember> => {
-    const res = await fetch(`${API_BASE_URL}/team`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(member) });
-    if (!res.ok) throw new Error('Failed to create team member'); return res.json();
-};
-
-export const fetchWorkAssignments = async (): Promise<WorkAssignment[]> => {
-    const res = await fetch(`${API_BASE_URL}/assignments`);
-    if (!res.ok) throw new Error('Failed to fetch assignments'); return res.json();
-};
-
-export const createWorkAssignment = async (assignment: Partial<WorkAssignment>, teamMemberId: string, clientId: string): Promise<WorkAssignment> => {
-    const res = await fetch(`${API_BASE_URL}/assignments?teamMemberId=${teamMemberId}&clientId=${clientId}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(assignment)
-    });
-    if (!res.ok) throw new Error('Failed to create assignment'); return res.json();
-};
-
+// Expense Mocks
 export const fetchExpenses = async (): Promise<Expense[]> => {
-    const res = await fetch(`${API_BASE_URL}/expenses`);
-    if (!res.ok) throw new Error('Failed to fetch expenses'); return res.json();
+    return [...mockExpenses];
+};
+export const createExpense = async (expense: Partial<Expense>) => {
+    const newExp = { ...expense, id: expenseIdCounter++ } as Expense;
+    mockExpenses.push(newExp);
+    return newExp;
+};
+export const updateExpenseStatus = async (id: number, status: string) => {
+    const exp = mockExpenses.find(e => e.id === id);
+    if (exp) exp.isPaid = (status === 'PAID');
+};
+export const updateExpense = async (id: number, expense: Partial<Expense>) => {
+    const expIndex = mockExpenses.findIndex(e => e.id === id);
+    if (expIndex > -1) mockExpenses[expIndex] = { ...mockExpenses[expIndex], ...expense };
 };
 
-export const createExpense = async (expense: Expense): Promise<Expense> => {
-    const res = await fetch(`${API_BASE_URL}/expenses`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(expense) });
-    if (!res.ok) throw new Error('Failed to create expense'); return res.json();
+export const updateInvoice = async (id: number, invoice: Partial<Invoice>) => {
+    const invIndex = mockInvoices.findIndex(i => i.id === id);
+    if (invIndex > -1) mockInvoices[invIndex] = { ...mockInvoices[invIndex], ...invoice };
+};
+
+export const createTeamMember = (member: TeamMember) => fetcher('/team', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(member) });
+export const deleteTeamMember = (id: number) => fetcher(`/team/${id}`, { method: 'DELETE' });
+
+export const deleteTask = (id: number) => fetcher(`/tasks/${id}`, { method: 'DELETE' });
+export const deleteExpense = async (id: number) => {
+    mockExpenses = mockExpenses.filter(exp => exp.id !== id);
 };

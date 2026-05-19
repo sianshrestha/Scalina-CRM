@@ -15,4 +15,6 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
 
     // Fallback if needed globally
     List<Project> findByClientId(Long clientId);
+
+    Optional<Project> findByClientIdAndWeekCode(Long clientId, String weekCode);
 }

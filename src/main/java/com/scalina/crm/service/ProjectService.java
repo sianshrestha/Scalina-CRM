@@ -22,6 +22,8 @@ public class ProjectService {
         ClientLead client = clientLeadRepository.findById(clientId)
                 .orElseThrow(() -> new RuntimeException("Client not found"));
 
+        ensureProjectCodeIsAvailable(client, weekCode, null);
+
         Project project = new Project();
         project.setClient(client);
         project.setWeekCode(weekCode);
@@ -29,6 +31,32 @@ public class ProjectService {
         project.setProjectDeadline(deadline);
 
         return projectRepository.save(project);
+    }
+
+    @Transactional
+    public Project updateWeeklyProject(Long projectId, Long clientId, String weekCode, Integer numberOfVideos, LocalDate deadline) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new RuntimeException("Project not found"));
+
+        ClientLead client = clientLeadRepository.findById(clientId)
+                .orElseThrow(() -> new RuntimeException("Client not found"));
+
+        ensureProjectCodeIsAvailable(client, weekCode, projectId);
+
+        project.setClient(client);
+        project.setWeekCode(weekCode);
+        project.setNumberOfVideos(numberOfVideos);
+        project.setProjectDeadline(deadline);
+
+        return projectRepository.save(project);
+    }
+
+    private void ensureProjectCodeIsAvailable(ClientLead client, String weekCode, Long currentProjectId) {
+        projectRepository.findByClientIdAndWeekCode(client.getId(), weekCode).ifPresent(existingProject -> {
+            if (currentProjectId == null || !existingProject.getId().equals(currentProjectId)) {
+                throw new IllegalArgumentException("This client already has a project for the selected week.");
+            }
+        });
     }
 
     // You can add methods here to fetch all projects, cancel projects, etc.

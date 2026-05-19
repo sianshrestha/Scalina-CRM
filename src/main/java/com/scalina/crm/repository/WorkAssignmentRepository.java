@@ -11,4 +11,6 @@ import java.math.BigDecimal;
 public interface WorkAssignmentRepository extends JpaRepository<WorkAssignment, Long> {
     @Query("SELECT COALESCE(SUM(w.payAmount), 0) FROM WorkAssignment w")
     BigDecimal getTotalVariableCosts();
+
+    void deleteByTeamMemberId(Long teamMemberId);
 }

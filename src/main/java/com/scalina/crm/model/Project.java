@@ -1,5 +1,6 @@
 package com.scalina.crm.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -42,6 +43,7 @@ public class Project extends BaseEntity {
     @Column(nullable = false)
     private String overallProjectStatus = "PENDING";
 
+    @JsonIgnore
     @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Task> tasks = new ArrayList<>();
 

@@ -11,8 +11,24 @@ import lombok.Setter;
 @Table(name = "team_members")
 public class TeamMember extends BaseEntity {
     private String name;
-    private String role; // e.g., "Shooter", "Editor", "Developer"
+    private String role;
+    private String firstName;
+    private String lastName;
+    private String dob;
+    private String nationality;
+    private String personalEmail;
+    private String phoneNumber;
+    private String residentialCountry;
+    private String residentialState;
+    private String streetAddress;
+    private String postcode;
+    private String bankCountry;
+    private String bankName;
+    private String accountName;
+    private String bsb;
+    private String accountNumber;
+    private String accountPhoneNumber;
+    private String emergencyContactName;
+    private String emergencyContactNumber;
 
-    // Optional: You could store default rates here in the future,
-    // but we will hardcode the 50 / 25 logic in the service for now.
 }

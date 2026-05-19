@@ -24,7 +24,7 @@ public class TaskService {
     private final ExpenseRepository expenseRepository;
 
     @Transactional
-    public Task assignTask(Long projectId, Task taskDetails) { // Removed agencyId parameter
+    public Task assignTask(Long projectId, Task taskDetails) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new RuntimeException("Project not found"));
 
@@ -46,7 +46,7 @@ public class TaskService {
                 .orElseThrow(() -> new RuntimeException("Task not found"));
 
         if (task.isCompleted()) {
-            return task; // Already completed
+            return task;
         }
 
         task.setCompleted(true);
@@ -79,6 +79,22 @@ public class TaskService {
         if(updated) projectRepository.save(project);
     }
 
+    @Transactional
+    public Task updateTaskDate(Long taskId, LocalDate newDate) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new RuntimeException("Task not found"));
+        task.setTaskDate(newDate);
+        return taskRepository.save(task);
+    }
+
+    @Transactional
+    public void deleteTask(Long taskId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new RuntimeException("Task not found"));
+        taskRepository.delete(task);
+    }
+
+    // FIXED: Added missing method header and parameters
     private void rollUpProjectStatuses(Project project) {
         List<Task> projectTasks = project.getTasks();
 
@@ -96,16 +112,13 @@ public class TaskService {
             }
         }
 
-        // Update Script/Shoot status
         if (scriptDone) project.setScriptStatus("COMPLETED");
         if (shootDone) project.setShootStatus("COMPLETED");
 
-        // Update Edit Status (Only completed if ALL assigned videos are done, AND they match the project's total video count)
         if (totalEditTasksAssigned == project.getNumberOfVideos() && completedEditTasks == project.getNumberOfVideos()) {
             project.setOverallEditStatus("COMPLETED");
         }
 
-        // Final Project Roll-up
         if ("COMPLETED".equals(project.getScriptStatus()) &&
                 "COMPLETED".equals(project.getShootStatus()) &&
                 "COMPLETED".equals(project.getOverallEditStatus())) {
@@ -116,30 +129,25 @@ public class TaskService {
     }
 
     private void handleFinancialAutomation(Task task) {
-        // We only automate daily pay for SCRIPT and SHOOT teams.
         if (task.getTaskType() == TaskType.SCRIPT || task.getTaskType() == TaskType.SHOOT) {
 
             String memberName = task.getAssignee();
             LocalDate workDate = task.getTaskDate();
 
-            // Check if a salary expense already exists for this person on this exact day
+            // Note: Updated to use the correct repository method name
             Optional<Expense> existingExpense = expenseRepository
-                    .findByTitleAndExpenseDateAndCategory(memberName, workDate, "SALARY");
+                    .findByTitleAndExpenseDateAndType(memberName, workDate, "Salary");
 
             if (existingExpense.isEmpty()) {
-                // No expense exists for this day, so we create a new one!
                 Expense newExpense = new Expense();
                 newExpense.setTitle(memberName);
-                newExpense.setCategory("SALARY");
-                newExpense.setType("ONE_TIME");
+                newExpense.setType("Salary"); // Set Category
+                newExpense.setRecurring(false); // Set Recurring status correctly
                 newExpense.setExpenseDate(workDate);
-                newExpense.setPaid(false); // It goes into "Upcoming Payments"
+                newExpense.setPaid(false);
 
-                // Note: We leave amount as null. The user will input this manually in the frontend later!
                 expenseRepository.save(newExpense);
             }
-            // If it DOES exist, we do nothing. This fulfills your requirement that they
-            // only get ONE salary line item per day, even if they finish multiple tasks.
         }
     }
 }

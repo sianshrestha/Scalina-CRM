@@ -13,13 +13,12 @@ import java.time.LocalDate;
 public class Expense extends BaseEntity {
 
     @Column(nullable = false)
-    private String title; // E.g., Member's name or "CapCut Subscription"
+    private String title; // E.g., "Jane Doe - Base Pay" or "Adobe CC"
 
-    @Column(nullable = false)
-    private String category; // SALARY, SOFTWARE, OTHERS, EQUIPMENT
+    @Column(name = "expense_type", nullable = false)
+    private String type; // Frontend sends the category here (e.g., "Salary", "Software Subscription")
 
-    @Column(nullable = false)
-    private String type; // RECURRING, ONE_TIME
+    private String payee; // The team member name or vendor
 
     private BigDecimal amount;
 
@@ -28,8 +27,14 @@ public class Expense extends BaseEntity {
 
     private String reference;
 
-    private String receiptPhotoUrl; // Path to uploaded AWS S3 / Local image
+    @Column(columnDefinition = "TEXT") // CRITICAL: Base64 image strings are huge. You must use TEXT, not VARCHAR.
+    private String receiptUrl; // Matched to frontend's "receiptUrl"
 
     // false = Upcoming Payment, true = Make Payment clicked (moves to history)
     private boolean isPaid = false;
+
+    // --- RECURRING LOGIC FIELDS ---
+    private boolean isRecurring = false; // Matched to frontend's boolean toggle
+
+    private String frequency; // Will store "WEEKLY" or "MONTHLY"
 }
