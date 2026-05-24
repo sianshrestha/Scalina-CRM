@@ -1,69 +1,184 @@
-import React, { useState, useEffect } from 'react';
-import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer';
+import { useState, useEffect } from 'react';
+import { Document, Page, Text, View, StyleSheet, pdf, Image } from '@react-pdf/renderer';
 import {
     fetchPipeline,
-    fetchAllProjects,
     fetchInvoices,
     createInvoice,
     updateInvoice,
     updateInvoiceStatus,
     type ClientLead,
-    type Project,
     type Invoice,
     type InvoiceItem
 } from '../services/api';
 
-// --- PDF STYLES & COMPONENT ---
+import logoImg from '../assets/Scalina Media.png';
+import signatureImg from '../assets/signature.png';
+
+// --- PIXEL-PERFECT PDF STYLES ---
 const pdfStyles = StyleSheet.create({
-    page: { padding: 40, fontFamily: 'Helvetica', fontSize: 10, color: '#333' },
-    headerContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 40 },
-    companyName: { fontSize: 24, fontWeight: 'bold', color: '#1a1a1a' },
-    tagline: { fontSize: 10, color: '#666', marginTop: 4 },
-    invoiceTitle: { fontSize: 28, fontWeight: 'bold', color: '#d32f2f', marginTop: 10 },
-    section: { marginBottom: 20 },
-    boldText: { fontWeight: 'bold' },
-    table: { width: '100%', marginTop: 20 },
-    tableHeader: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#000', paddingBottom: 5, marginBottom: 5, fontWeight: 'bold' },
-    tableRow: { flexDirection: 'row', marginBottom: 5 },
-    colDesc: { width: '55%' },
-    colQty: { width: '15%', textAlign: 'center' },
-    colPrice: { width: '15%', textAlign: 'right' },
-    colTotal: { width: '15%', textAlign: 'right' },
-    totalsContainer: { alignSelf: 'flex-end', width: '30%', marginTop: 20 },
-    totalsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
-    footer: { marginTop: 50, paddingTop: 20, borderTopWidth: 1, borderTopColor: '#ccc', fontSize: 9, color: '#555' }
+    page: {
+        paddingTop: 0, paddingBottom: 50, paddingLeft: 55, paddingRight: 55,
+        fontFamily: 'Helvetica', fontSize: 10, color: '#000000', backgroundColor: '#FFFFFF',
+    },
+
+    headerDivider: {
+        borderBottomWidth: 1.2, borderBottomColor: '#000000', marginBottom: 11,
+    },
+
+
+    // ── HEADER ──────────────────────────────────────────────────────────────
+    headerContainer: {
+        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14,
+    },
+    logoAndTitle: { width: '55%' },
+    logo: { width: 210, marginBottom: 0 },
+    invoiceTitleMain: {
+        fontSize: 30, fontFamily: 'Helvetica-Bold', color: '#000000',
+        letterSpacing: 2, textAlign: 'right',
+    },
+
+    // ── DIVIDER LINE under header ────────────────────────────────────────────
+
+    // ── INVOICE TO + DETAILS (two-column row) ───────────────────────────────
+    infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
+    invoiceToBlock: { width: '52%' },
+    billToLabel: { fontFamily: 'Helvetica-Bold', fontSize: 12, marginBottom: 10 },
+    clientName: { fontSize: 12, fontFamily: 'Helvetica', marginBottom: 5 },
+    clientText: { fontSize: 12, marginBottom: 4, color: '#000000', lineHeight: 1.4 },
+
+    invoiceDetailsBox: { width: '40%' },
+    detailRow: { flexDirection: 'row', marginBottom: 6 },
+    detailLabel: { fontFamily: 'Helvetica-Bold', fontSize: 12, width: '52%', textAlign: 'left' },
+    detailValue: { fontSize: 12, width: '48%', textAlign: 'left' },
+
+    // ── TABLE ────────────────────────────────────────────────────────────────
+    table: { width: '100%' },
+    tableTopLine: { borderTopWidth: 1.2, borderTopColor: '#000000' },
+    tableHeader: {
+        flexDirection: 'row',
+        borderBottomWidth: 1.2, borderBottomColor: '#000000',
+        paddingVertical: 8,
+    },
+    tableHeaderCol: { fontFamily: 'Helvetica-Bold', fontSize: 10, color: '#000000' },
+    tableRow: { flexDirection: 'row', paddingVertical: 10 },
+    tableBottomLine: { borderTopWidth: 1, borderTopColor: '#cccccc', marginTop: 4 },
+
+    colDesc: { width: '52%' },
+    colQty: { width: '16%', textAlign: 'center' },
+    colPrice: { width: '16%', textAlign: 'right' },
+    colTotal: { width: '16%', textAlign: 'right' },
+
+    // ── BANK DETAILS + TOTALS side-by-side ───────────────────────────────────
+    // Outer row: left=bank details, right=totals — both start at the same top edge
+    bottomSection: {
+        flexDirection: 'row', justifyContent: 'space-between',
+        alignItems: 'flex-start', marginTop: 28,
+    },
+
+    // Left half: bank details then signature stacked vertically
+    bottomLeft: { width: '52%' },
+    bankText: { fontSize: 10, color: '#000000', lineHeight: 1.7 },
+    bankEmailGap: { marginBottom: 8 },
+
+    // Signature sits below bank details on the left
+    signatureBox: {
+        marginTop: 14,
+        width: 155, height: 55,
+        borderBottomWidth: 1, borderBottomColor: '#000000',
+        justifyContent: 'flex-end', alignItems: 'center', marginBottom: 4,
+    },
+    signatureImage: { width: 135, height: 50, objectFit: 'contain' },
+    adminText: { fontSize: 10, textAlign: 'center', width: 155 },
+
+    // Right half: totals block
+    totalsWrapper: { width: '44%' },
+    totalsTopLine: { borderTopWidth: 1, borderTopColor: '#000000' },
+    totalsRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 },
+    totalsBottomLine: { borderTopWidth: 1, borderTopColor: '#000000' },
+    totalFinalRow: {
+        flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5,
+        fontFamily: 'Helvetica-Bold', fontSize: 11,
+    },
+    totalsEndLine: { borderTopWidth: 1, borderTopColor: '#000000' },
+
+    // THANK YOU — sits to the right, below totals
+    thankYouText: {
+        fontSize: 22, fontFamily: 'Helvetica-Bold', color: '#000000',
+        letterSpacing: 1, marginTop: 64, textAlign: 'center',
+    },
+
+    boldText: { fontFamily: 'Helvetica-Bold' },
 });
 
+const formatToAustralianDate = (dateString?: string) => {
+    if (!dateString) return '';
+    const parts = dateString.split('-');
+    if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return dateString;
+};
+
+
+
+// --- PDF RENDERER COMPONENT ---
 const InvoiceDocument = ({ invoice, client }: { invoice: any, client: any }) => {
     const formatMoney = (amount: number) => `$${(amount || 0).toFixed(2)}`;
+
+    // Reverse math for the PDF subtotal if GST was applied
+    const subTotal = invoice.hasGst ? (invoice.amount - invoice.gstAmount) : invoice.amount;
+
     return (
         <Document>
             <Page size="A4" style={pdfStyles.page}>
+
+                {/* ── HEADER: Logo (left) + "INVOICE" title (right) ── */}
                 <View style={pdfStyles.headerContainer}>
-                    <View>
-                        <Text style={pdfStyles.companyName}>Scalina Media</Text>
-                        <Text style={pdfStyles.tagline}>Go Digital, or Go Invisible.</Text>
-                        <Text style={pdfStyles.invoiceTitle}>INVOICE</Text>
+                    <View style={pdfStyles.logoAndTitle}>
+                        <Image src={logoImg} style={pdfStyles.logo} />
                     </View>
-                    <View>
-                        <Text><Text style={pdfStyles.boldText}>Client ID: </Text>{client.clientCode || 'N/A'}</Text>
-                        <Text><Text style={pdfStyles.boldText}>Invoice No: </Text>{invoice.invoiceNumber || '001'}</Text>
-                        <Text><Text style={pdfStyles.boldText}>Invoice Date: </Text>{invoice.issueDate}</Text>
+                    <Text style={pdfStyles.invoiceTitleMain}>INVOICE</Text>
+                </View>
+
+                {/* ── FULL-WIDTH DIVIDER ── */}
+                <View style={pdfStyles.headerDivider} />
+
+                {/* ── "INVOICE TO" (left) + Details grid (right) ── */}
+                <View style={pdfStyles.infoRow}>
+                    <View style={pdfStyles.invoiceToBlock}>
+                        <Text style={pdfStyles.billToLabel}>INVOICE TO :</Text>
+                        <Text style={pdfStyles.clientName}>{client?.company || client?.name}</Text>
+                        {client?.abn && <Text style={pdfStyles.clientText}>ABN: {client.abn}</Text>}
+                        {client?.address && <Text style={pdfStyles.clientText}>Address: {client.address}</Text>}
+                    </View>
+
+                    <View style={pdfStyles.invoiceDetailsBox}>
+                        <View style={pdfStyles.detailRow}>
+                            <Text style={pdfStyles.detailLabel}>Client ID:</Text>
+                            <Text style={pdfStyles.detailValue}>{'SM'+client?.clientCode || '___'}</Text>
+                        </View>
+                        <View style={pdfStyles.detailRow}>
+                            <Text style={pdfStyles.detailLabel}>Invoice No:</Text>
+                            <Text style={pdfStyles.detailValue}>{invoice.invoiceNo || '001'}</Text>
+                        </View>
+                        <View style={pdfStyles.detailRow}>
+                            <Text style={pdfStyles.detailLabel}>Invoice Date:</Text>
+                            <Text style={pdfStyles.detailValue}>{formatToAustralianDate(invoice.invoiceDate)}</Text>
+                        </View>
                     </View>
                 </View>
-                <View style={pdfStyles.section}>
-                    <Text style={pdfStyles.boldText}>INVOICE TO :</Text>
-                    <Text>{client.company || client.name || 'Unknown Client'}</Text>
-                    <Text>ABN: {client.abn || 'N/A'}</Text>
-                    <Text>Address: {client.address || 'N/A'}</Text>
-                </View>
+
+                {/* ── LINE ITEMS TABLE ── */}
                 <View style={pdfStyles.table}>
+
+
+                    {/* Header row */}
                     <View style={pdfStyles.tableHeader}>
-                        <Text style={pdfStyles.colDesc}>DESCRIPTION</Text>
-                        <Text style={pdfStyles.colQty}>QTY</Text>
-                        <Text style={pdfStyles.colPrice}>PRICE</Text>
-                        <Text style={pdfStyles.colTotal}>TOTAL</Text>
+                        <Text style={[pdfStyles.colDesc, pdfStyles.tableHeaderCol]}>DESCRIPTION</Text>
+                        <Text style={[pdfStyles.colQty, pdfStyles.tableHeaderCol]}>QTY</Text>
+                        <Text style={[pdfStyles.colPrice, pdfStyles.tableHeaderCol]}>PRICE</Text>
+                        <Text style={[pdfStyles.colTotal, pdfStyles.tableHeaderCol]}>TOTAL</Text>
                     </View>
+
+                    {/* Data rows */}
                     {invoice.items && invoice.items.map((item: any, index: number) => (
                         <View key={index} style={pdfStyles.tableRow}>
                             <Text style={pdfStyles.colDesc}>{item.description}</Text>
@@ -72,72 +187,111 @@ const InvoiceDocument = ({ invoice, client }: { invoice: any, client: any }) => 
                             <Text style={pdfStyles.colTotal}>{formatMoney(item.quantity * item.price)}</Text>
                         </View>
                     ))}
+
+                    {/* Bottom border line */}
+                    <View style={pdfStyles.tableBottomLine} />
                 </View>
-                <View style={pdfStyles.totalsContainer}>
-                    <View style={pdfStyles.totalsRow}>
-                        <Text style={pdfStyles.boldText}>Sub-total:</Text>
-                        <Text>{formatMoney(invoice.amount)}</Text>
+
+                {/* ── BANK DETAILS (left) + TOTALS (right) — same row, flush to table bottom ── */}
+                <View style={pdfStyles.bottomSection}>
+
+                    {/* LEFT: email, bank details, then signature */}
+                    <View style={pdfStyles.bottomLeft}>
+                        <Text style={[pdfStyles.bankText, pdfStyles.bankEmailGap]}>info@scalinamedia.com</Text>
+                        <Text style={pdfStyles.bankText}>ABN: 81821315775</Text>
+                        <Text style={pdfStyles.bankText}>Account Name: Suhan Shanker</Text>
+                        <Text style={pdfStyles.bankText}>BSB: 062-235</Text>
+                        <Text style={pdfStyles.bankText}>Account Number: 11067512</Text>
+
+                        {/* Signature below bank details, left-aligned */}
+                        <View style={pdfStyles.signatureBox}>
+                            <Image src={signatureImg} style={pdfStyles.signatureImage} />
+                        </View>
+                        <Text style={pdfStyles.adminText}>Administrator</Text>
                     </View>
-                    <View style={pdfStyles.totalsRow}>
-                        <Text style={pdfStyles.boldText}>Total:</Text>
-                        <Text style={pdfStyles.boldText}>{formatMoney(invoice.amount)}</Text>
+
+                    {/* RIGHT: totals block + THANK YOU below */}
+                    <View style={pdfStyles.totalsWrapper}>
+                        <View style={pdfStyles.totalsRow}>
+                            <Text style={pdfStyles.boldText}>Sub-total :</Text>
+                            <Text>{formatMoney(subTotal)}</Text>
+                        </View>
+
+                        {invoice.hasGst && (
+                            <View style={pdfStyles.totalsRow}>
+                                <Text style={pdfStyles.boldText}>GST (10%) :</Text>
+                                <Text>{formatMoney(invoice.gstAmount)}</Text>
+                            </View>
+                        )}
+
+                        <View style={pdfStyles.totalsBottomLine} />
+                        <View style={pdfStyles.totalFinalRow}>
+                            <Text>Total :</Text>
+                            <Text>{formatMoney(invoice.amount)}</Text>
+                        </View>
+                        <View style={pdfStyles.totalsEndLine} />
+
+                        {/* THANK YOU right-aligned below totals */}
+                        <Text style={pdfStyles.thankYouText}>THANK YOU!</Text>
                     </View>
+
                 </View>
-                <View style={pdfStyles.footer}>
-                    <Text>info@scalinamedia.com</Text>
-                    <Text>  </Text>
-                    <Text>ABN: 81821315775</Text>
-                    <Text>Account Name: Suhan Shanker</Text>
-                    <Text>BSB: 062-235</Text>
-                    <Text>Account Number: 11067512</Text>
-                    <Text style={{ marginTop: 20, fontSize: 12, fontWeight: 'bold', textAlign: 'center' }}>THANK YOU!</Text>
-                </View>
+
             </Page>
         </Document>
     );
 };
 
-// --- MAIN HUB COMPONENT ---
 const getTodayString = () => {
     const date = new Date();
     const offset = date.getTimezoneOffset();
     return new Date(date.getTime() - (offset * 60 * 1000)).toISOString().split('T')[0];
 };
 
-export const InvoicingHub: React.FC = () => {
+const calculateAutoDueDate = (issueDateStr: string) => {
+    if (!issueDateStr) return '';
+    const d = new Date(issueDateStr);
+    d.setDate(d.getDate() + 5);
+    return d.toISOString().split('T')[0];
+};
+
+// --- MAIN DASHBOARD COMPONENT ---
+export const InvoicingHub = () => {
     const [clients, setClients] = useState<ClientLead[]>([]);
-    const [projects, setProjects] = useState<Project[]>([]);
     const [invoices, setInvoices] = useState<Invoice[]>([]);
 
-    // --- UI State ---
     const [showModal, setShowModal] = useState(false);
     const [statusFilters, setStatusFilters] = useState<string[]>([]);
     const [clientFilter, setClientFilter] = useState<number | ''>('');
-    const [sortConfig, setSortConfig] = useState<{ field: 'date' | 'amount', order: 'asc' | 'desc' }>({ field: 'date', order: 'desc' });
+    const [sortConfig, setSortConfig] = useState<{ field: 'date' | 'amount' | 'invoiceNo', order: 'asc' | 'desc' }>({ field: 'date', order: 'desc' });
 
-    // --- Analytics Timeframe State ---
     const [analyticsPeriod, setAnalyticsPeriod] = useState<'ALL' | 'THIS_MONTH' | 'THIS_YEAR' | 'CUSTOM'>('THIS_YEAR');
     const [customStart, setCustomStart] = useState('');
     const [customEnd, setCustomEnd] = useState('');
 
-    // --- Form State ---
     const [editingInvoiceId, setEditingInvoiceId] = useState<number | null>(null);
     const [modalClientId, setModalClientId] = useState<number | ''>('');
-    const [modalProjectId, setModalProjectId] = useState<number | ''>('');
     const [issueDate, setIssueDate] = useState(getTodayString());
-    const [dueDate, setDueDate] = useState('');
+    const [dueDate, setDueDate] = useState(calculateAutoDueDate(getTodayString()));
+    const [hasGst, setHasGst] = useState(false);
+
+    const [weeksCovered, setWeeksCovered] = useState<number>(1);
+
     const [billingDetails, setBillingDetails] = useState('');
     const [lineItems, setLineItems] = useState<InvoiceItem[]>([{ description: '', quantity: 1, price: 0 }]);
 
     useEffect(() => {
         fetchPipeline().then(data => setClients(data.filter((c: ClientLead) => c.clientCode)));
-        fetchAllProjects().then(setProjects);
         loadInvoices();
     }, []);
 
     const loadInvoices = async () => {
-        const data = await fetchInvoices();
-        setInvoices(data);
+        try {
+            const data = await fetchInvoices();
+            setInvoices(data || []);
+        } catch (error) {
+            console.error("Could not load invoices", error);
+        }
     };
 
     useEffect(() => {
@@ -151,11 +305,7 @@ export const InvoicingHub: React.FC = () => {
         }
     }, [modalClientId, clients]);
 
-    const filteredModalProjects = modalClientId
-        ? projects.filter((p: Project) => p.client?.id === Number(modalClientId))
-        : [];
-
-    const calculateTotal = () => lineItems.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+    const calculateSubTotal = () => lineItems.reduce((sum, item) => sum + (item.quantity * item.price), 0);
 
     const addLineItem = () => setLineItems([...lineItems, { description: '', quantity: 1, price: 0 }]);
     const removeLineItem = (index: number) => setLineItems(lineItems.filter((_, i) => i !== index));
@@ -167,37 +317,49 @@ export const InvoicingHub: React.FC = () => {
 
     const handleSaveInvoice = async (e: React.FormEvent) => {
         e.preventDefault();
-        const client = clients.find(c => c.id === modalClientId);
-        const invNum = `INV-${client?.clientCode || 'XXX'}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+        const subTotal = calculateSubTotal();
+        const calculatedGst = hasGst ? subTotal * 0.10 : 0;
+        const grandTotal = subTotal + calculatedGst;
+
+        const existingInvoice = editingInvoiceId
+            ? invoices.find(i => i.id === editingInvoiceId)
+            : null;
 
         const payload = {
-            invoiceNumber: editingInvoiceId ? invoices.find(i=>i.id===editingInvoiceId)?.invoiceNumber : invNum,
             clientId: Number(modalClientId),
-            clientName: client?.name,
-            projectId: modalProjectId ? Number(modalProjectId) : undefined,
-            amount: calculateTotal(),
-            issueDate,
-            dueDate,
-            status: 'DRAFT',
+            amount: grandTotal,
+            invoiceDate: issueDate,
+            dueDate: dueDate,
+            hasGst: hasGst,
+            weeksCovered: weeksCovered,
+            gstAmount: calculatedGst,
+            status: existingInvoice?.status || 'DRAFT',
             items: lineItems
         };
 
-        if (editingInvoiceId) {
-            await updateInvoice(editingInvoiceId, payload as Partial<Invoice>);
-        } else {
-            await createInvoice(payload as Partial<Invoice>);
+        try {
+            if (editingInvoiceId) {
+                await updateInvoice(editingInvoiceId, payload as Partial<Invoice>);
+            } else {
+                await createInvoice(Number(modalClientId), payload as Partial<Invoice>);
+            }
+            closeModal();
+            loadInvoices();
+        } catch (error) {
+            console.error("Failed to save invoice:", error);
+            alert("Error saving invoice!");
         }
-
-        closeModal();
-        loadInvoices();
     };
 
     const openEditModal = (inv: Invoice) => {
         setEditingInvoiceId(inv.id!);
-        setModalClientId(inv.clientId);
-        setModalProjectId(inv.projectId || '');
-        setIssueDate(inv.issueDate);
-        setDueDate(inv.dueDate);
+        // @ts-ignore
+        setModalClientId(inv.clientId || inv.client?.id || '');
+        setIssueDate(inv.invoiceDate || getTodayString());
+        setDueDate(inv.dueDate || calculateAutoDueDate(inv.invoiceDate || getTodayString()));
+        setWeeksCovered(inv.weeksCovered || 1);
+        setHasGst(inv.hasGst || false);
         setLineItems(inv.items && inv.items.length > 0 ? inv.items : [{ description: '', quantity: 1, price: 0 }]);
         setShowModal(true);
     };
@@ -205,11 +367,15 @@ export const InvoicingHub: React.FC = () => {
     const closeModal = () => {
         setShowModal(false);
         setEditingInvoiceId(null);
-        setModalClientId(''); setModalProjectId(''); setIssueDate(getTodayString()); setDueDate('');
+        setModalClientId('');
+        setIssueDate(getTodayString());
+        setDueDate(calculateAutoDueDate(getTodayString()));
+        setWeeksCovered(1)
+        setHasGst(false);
         setLineItems([{ description: '', quantity: 1, price: 0 }]);
     };
 
-    const handleSort = (field: 'date' | 'amount') => {
+    const handleSort = (field: 'date' | 'amount' | 'invoiceNo') => {
         setSortConfig({
             field,
             order: sortConfig.field === field && sortConfig.order === 'asc' ? 'desc' : 'asc'
@@ -225,11 +391,17 @@ export const InvoicingHub: React.FC = () => {
     };
 
     const generatePDF = async (inv: Invoice) => {
-        const client = clients.find(c => c.id === inv.clientId) || {};
+        const matchedClient = inv.client || clients.find(c => c.id === inv.clientId);
         try {
-            const blob = await pdf(<InvoiceDocument invoice={inv} client={client} />).toBlob();
+            const blob = await pdf(<InvoiceDocument invoice={inv} client={matchedClient || {}} />).toBlob();
             const url = URL.createObjectURL(blob);
-            window.open(url, '_blank');
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Invoice_${matchedClient?.clientCode || 'UNKNOWN'}_${inv.invoiceNo}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         } catch (error) {
             console.error("Error generating PDF:", error);
             alert("Failed to generate PDF.");
@@ -243,16 +415,14 @@ export const InvoicingHub: React.FC = () => {
         'OVERDUE': 'bg-red-50 text-red-700',
     };
 
-    // --- UPDATED ANALYTICS DATE FILTERING LOGIC ---
     const today = new Date();
     const currentMonth = today.getMonth();
     const currentYear = today.getFullYear();
 
     const analyticsInvoices = invoices.filter(inv => {
         if (analyticsPeriod === 'ALL') return true;
-
-        const invDate = new Date(inv.issueDate);
-        if (isNaN(invDate.getTime())) return true; // Safe fallback if date is broken
+        const invDate = new Date(inv.invoiceDate || '');
+        if (isNaN(invDate.getTime())) return true;
 
         if (analyticsPeriod === 'THIS_MONTH') {
             return invDate.getMonth() === currentMonth && invDate.getFullYear() === currentYear;
@@ -261,40 +431,40 @@ export const InvoicingHub: React.FC = () => {
             return invDate.getFullYear() === currentYear;
         }
         if (analyticsPeriod === 'CUSTOM') {
-            if (customStart && inv.issueDate < customStart) return false;
-            if (customEnd && inv.issueDate > customEnd) return false;
+            if (customStart && inv.invoiceDate! < customStart) return false;
+            if (customEnd && inv.invoiceDate! > customEnd) return false;
             return true;
         }
         return true;
     });
 
     const collectedRevenue = analyticsInvoices.filter(i => i.status === 'PAID').reduce((acc, curr) => acc + curr.amount, 0);
+    const estimatedRevenue = analyticsInvoices.filter(i => i.status !== 'DRAFT').reduce((acc, curr) => acc + curr.amount, 0);
 
-    // FIX: Estimated Revenue completely ignores DRAFT invoices now
-    const estimatedRevenue = analyticsInvoices
-        .filter(i => i.status !== 'DRAFT')
-        .reduce((acc, curr) => acc + curr.amount, 0);
-
-    // --- TABLE FILTERING LOGIC ---
     const filteredAndSortedInvoices = invoices
         .filter(inv => {
             const matchesStatus = statusFilters.length === 0 || statusFilters.includes(inv.status);
-            const matchesClient = clientFilter === '' || inv.clientId === Number(clientFilter);
+            const resolvedClientId = inv.client?.id || inv.clientId;
+            const matchesClient = clientFilter === '' || resolvedClientId === Number(clientFilter);
             return matchesStatus && matchesClient;
         })
         .sort((a, b) => {
             if (sortConfig.field === 'amount') {
                 return sortConfig.order === 'asc' ? a.amount - b.amount : b.amount - a.amount;
+            } else if (sortConfig.field === 'invoiceNo') {
+                // Alphabetical string comparison for Invoice Numbers
+                return sortConfig.order === 'asc'
+                    ? (a.invoiceNo || '').localeCompare(b.invoiceNo || '')
+                    : (b.invoiceNo || '').localeCompare(a.invoiceNo || '');
             } else {
                 return sortConfig.order === 'asc'
-                    ? new Date(a.issueDate).getTime() - new Date(b.issueDate).getTime()
-                    : new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime();
+                    ? new Date(a.invoiceDate || '').getTime() - new Date(b.invoiceDate || '').getTime()
+                    : new Date(b.invoiceDate || '').getTime() - new Date(a.invoiceDate || '').getTime();
             }
         });
 
     return (
         <div className="p-6 bg-gray-50 min-h-screen flex flex-col gap-6">
-
             <div className="flex justify-between items-center shrink-0">
                 <h2 className="text-2xl font-bold text-gray-800">Invoicing Hub</h2>
                 <button onClick={() => setShowModal(true)} className="bg-blue-600 text-white px-5 py-2 rounded-lg shadow hover:bg-blue-700 font-medium transition">
@@ -302,11 +472,9 @@ export const InvoicingHub: React.FC = () => {
                 </button>
             </div>
 
-            {/* DYNAMIC REVENUE ANALYTICS */}
             <div className="flex flex-col gap-3 shrink-0">
                 <div className="flex flex-wrap justify-between items-end gap-4">
                     <h3 className="text-sm font-bold text-gray-600 uppercase tracking-widest">Revenue Analytics</h3>
-
                     <div className="flex flex-wrap items-center gap-3">
                         <select
                             className="border-gray-200 border p-2 rounded-lg text-xs font-bold outline-none focus:border-blue-400 text-gray-600 bg-white shadow-sm"
@@ -341,7 +509,6 @@ export const InvoicingHub: React.FC = () => {
                 </div>
             </div>
 
-            {/* FILTERS TOP BAR */}
             <div className="flex flex-wrap gap-6 bg-white p-4 rounded-xl shadow-sm border border-gray-100 shrink-0 items-center">
                 <div className="w-[250px]">
                     <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Client Filter</label>
@@ -372,7 +539,9 @@ export const InvoicingHub: React.FC = () => {
                     <table className="min-w-full w-full">
                         <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
                         <tr className="text-gray-500 text-[10px] uppercase font-bold tracking-widest text-left">
-                            <th className="px-6 py-4">Invoice #</th>
+                            <th className="px-6 py-4 cursor-pointer hover:text-blue-600" onClick={() => handleSort('invoiceNo')}>
+                                Invoice No {sortConfig.field === 'invoiceNo' ? (sortConfig.order === 'asc' ? '↑' : '↓') : ''}
+                            </th>
                             <th className="px-6 py-4">Client</th>
                             <th className="px-6 py-4 cursor-pointer hover:text-blue-600" onClick={() => handleSort('date')}>
                                 Issue Date {sortConfig.field === 'date' ? (sortConfig.order === 'asc' ? '↑' : '↓') : ''}
@@ -388,116 +557,131 @@ export const InvoicingHub: React.FC = () => {
                         {filteredAndSortedInvoices.length === 0 ? (
                             <tr><td colSpan={6} className="text-center py-10 text-gray-400 text-sm">No invoices match your filters.</td></tr>
                         ) : (
-                            filteredAndSortedInvoices.map((inv) => (
-                                <tr key={inv.id} className="hover:bg-gray-50 transition-colors">
-                                    <td className="px-6 py-4 font-mono font-bold text-sm text-gray-900 whitespace-nowrap">{inv.invoiceNumber}</td>
-                                    <td className="px-6 py-4 text-sm font-medium text-gray-700 whitespace-nowrap">{inv.clientName || 'Unknown'}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">{inv.issueDate}</td>
-                                    <td className="px-6 py-4 text-sm font-black text-gray-900 text-right whitespace-nowrap">
-                                        ${inv.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <select
-                                            value={inv.status}
-                                            onChange={(e) => updateInvoiceStatus(inv.id!, e.target.value).then(loadInvoices)}
-                                            className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest outline-none cursor-pointer border border-transparent hover:border-gray-300 ${statusColors[inv.status] || statusColors['DRAFT']}`}
-                                        >
-                                            <option value="DRAFT">Draft</option>
-                                            <option value="SENT">Sent</option>
-                                            <option value="OVERDUE">Overdue</option>
-                                            <option value="PAID">Paid</option>
-                                        </select>
-                                    </td>
-                                    <td className="px-6 py-4 text-center whitespace-nowrap space-x-3">
-                                        <button onClick={() => openEditModal(inv)} className="text-[10px] font-bold text-gray-600 hover:text-blue-600 transition">Edit</button>
+                            filteredAndSortedInvoices.map((inv) => {
+                                const displayedClientName = inv.client?.name || clients.find(c => c.id === inv.clientId)?.name || 'Unknown';
 
-                                        {inv.status !== 'PAID' && (
-                                            <button onClick={() => updateInvoiceStatus(inv.id!, 'PAID').then(loadInvoices)} className="text-[10px] font-bold bg-green-50 text-green-700 px-3 py-1.5 rounded border border-green-200 hover:bg-green-100 transition">Mark Paid</button>
-                                        )}
-
-                                        <button onClick={() => generatePDF(inv)} className="text-[10px] font-bold text-red-600 hover:text-red-800 transition">📄 PDF</button>
-                                    </td>
-                                </tr>
-                            ))
+                                return (
+                                    <tr key={inv.id} className="hover:bg-gray-50 transition-colors">
+                                        <td className="px-6 py-4 font-mono font-bold text-sm text-gray-900 whitespace-nowrap">{inv.invoiceNo}</td>
+                                        <td className="px-6 py-4 text-sm font-medium text-gray-700 whitespace-nowrap">{displayedClientName}</td>
+                                        <td className="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">{formatToAustralianDate(inv.invoiceDate)}</td>
+                                        <td className="px-6 py-4 text-sm font-black text-gray-900 text-right whitespace-nowrap">
+                                            ${inv.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <select
+                                                value={inv.status}
+                                                onChange={(e) => updateInvoiceStatus(inv.id!, e.target.value).then(loadInvoices)}
+                                                className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest outline-none cursor-pointer border border-transparent hover:border-gray-300 ${statusColors[inv.status] || statusColors['DRAFT']}`}
+                                            >
+                                                <option value="DRAFT">Draft</option>
+                                                <option value="SENT">Sent</option>
+                                                <option value="OVERDUE">Overdue</option>
+                                                <option value="PAID">Paid</option>
+                                            </select>
+                                        </td>
+                                        <td className="px-6 py-4 text-center whitespace-nowrap space-x-3">
+                                            <button onClick={() => openEditModal(inv)} className="text-[10px] font-bold text-gray-600 hover:text-blue-600 transition">Edit</button>
+                                            {inv.status !== 'PAID' && (
+                                                <button onClick={() => updateInvoiceStatus(inv.id!, 'PAID').then(loadInvoices)} className="text-[10px] font-bold bg-green-50 text-green-700 px-3 py-1.5 rounded border border-green-200 hover:bg-green-100 transition">Mark Paid</button>
+                                            )}
+                                            <button onClick={() => generatePDF(inv)} className="text-[10px] font-bold text-red-600 hover:text-red-800 transition">📄 PDF</button>
+                                        </td>
+                                    </tr>
+                                );
+                            })
                         )}
                         </tbody>
                     </table>
                 </div>
             </div>
 
-
-
             {showModal && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-                    <div className="bg-white p-8 rounded-2xl w-[600px] shadow-2xl max-h-[90vh] flex flex-col">
-                        <h3 className="text-xl font-bold text-gray-800 mb-6 shrink-0">{editingInvoiceId ? 'Edit Invoice' : 'Create Draft'}</h3>
+                    <div className="bg-white rounded-2xl w-[600px] shadow-2xl flex flex-col" style={{ maxHeight: '90vh' }}>
+                        <div className="p-6 border-b border-gray-100 shrink-0">
+                            <h3 className="text-xl font-bold text-gray-800">{editingInvoiceId ? 'Edit Invoice' : 'Create Draft'}</h3>
+                        </div>
 
-                        <form onSubmit={handleSaveInvoice} className="space-y-4 overflow-y-auto pr-2 custom-scrollbar">
-                            <div className="grid grid-cols-2 gap-4">
+                        <form onSubmit={handleSaveInvoice} className="flex flex-col flex-1 min-h-0">
+                            <div className="p-6 overflow-y-auto custom-scrollbar space-y-4">
                                 <div>
                                     <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Client</label>
-                                    <select required className="w-full border-gray-200 border p-3 rounded-xl outline-none focus:border-blue-400 transition" value={modalClientId} onChange={e => { setModalClientId(Number(e.target.value)); setModalProjectId(''); }}>
+                                    <select required className="w-full border-gray-200 border p-3 rounded-xl outline-none focus:border-blue-400 transition" value={modalClientId} onChange={e => setModalClientId(Number(e.target.value))}>
                                         <option value="">Select Client...</option>
                                         {clients.map(c => <option key={c.id} value={c.id}>{c.name} ({c.clientCode})</option>)}
                                     </select>
                                 </div>
-                                <div>
-                                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Project <span className="font-normal opacity-70">(Optional)</span></label>
-                                    <select className="w-full border-gray-200 border p-3 rounded-xl outline-none focus:border-blue-400 transition disabled:bg-gray-50" value={modalProjectId} onChange={e => setModalProjectId(Number(e.target.value))} disabled={!modalClientId}>
-                                        <option value="">General Billing</option>
-                                        {filteredModalProjects.map((p: Project) => <option key={p.id} value={p.id}>{p.projectCode}</option>)}
-                                    </select>
-                                </div>
-                            </div>
 
-                            {/* CRM Billing Details Display */}
-                            {modalClientId && (
-                                <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">CRM Billing Details</span>
-                                    <p className="text-xs text-gray-600 whitespace-pre-line">{billingDetails}</p>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Issue Date</label>
+                                        <input required type="date" className="w-full border-gray-200 border p-3 rounded-xl outline-none focus:border-blue-400 transition" value={issueDate} onChange={e => {
+                                            setIssueDate(e.target.value);
+                                            setDueDate(calculateAutoDueDate(e.target.value));
+                                        }} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Due Date</label>
+                                        <input required type="date" className="w-full border-gray-200 border p-3 rounded-xl outline-none focus:border-blue-400 transition" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Weeks Covered</label>
+                                        <input required type="number" min="1" className="w-full border-gray-200 border p-3 rounded-xl outline-none focus:border-blue-400 transition" value={weeksCovered} onChange={e => setWeeksCovered(Number(e.target.value))} />
+                                    </div>
                                 </div>
-                            )}
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Issue Date</label>
-                                    <input required type="date" className="w-full border-gray-200 border p-3 rounded-xl outline-none focus:border-blue-400 transition" value={issueDate} onChange={e => setIssueDate(e.target.value)} />
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Due Date</label>
-                                    <input required type="date" className="w-full border-gray-200 border p-3 rounded-xl outline-none focus:border-blue-400 transition" value={dueDate} onChange={e => setDueDate(e.target.value)} />
-                                </div>
-                            </div>
 
-                            <div className="mt-6 pt-4 border-t border-gray-100">
-                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2 ml-1">Services / Particulars</label>
-                                <div className="space-y-2">
-                                    {lineItems.map((item, index) => (
-                                        <div key={index} className="flex gap-2 items-start">
-                                            <div className="flex-1">
-                                                <input required type="text" placeholder="Description" className="w-full border-gray-200 border p-2 rounded-lg text-sm outline-none focus:border-blue-400" value={item.description} onChange={e => handleLineItemChange(index, 'description', e.target.value)} />
+                                {modalClientId && (
+                                    <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">CRM Billing Details</span>
+                                        <p className="text-xs text-gray-600 whitespace-pre-line">{billingDetails}</p>
+                                    </div>
+                                )}
+
+                                <div className="pt-4 border-t border-gray-100">
+                                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2 ml-1">Services / Particulars</label>
+                                    <div className="space-y-2">
+                                        {lineItems.map((item, index) => (
+                                            <div key={index} className="flex gap-2 items-start">
+                                                <div className="flex-1">
+                                                    <input required type="text" placeholder="Description" className="w-full border-gray-200 border p-2 rounded-lg text-sm outline-none focus:border-blue-400" value={item.description} onChange={e => handleLineItemChange(index, 'description', e.target.value)} />
+                                                </div>
+                                                <div className="w-20">
+                                                    <input required type="number" min="1" placeholder="Qty" className="w-full border-gray-200 border p-2 rounded-lg text-sm outline-none focus:border-blue-400" value={item.quantity} onChange={e => handleLineItemChange(index, 'quantity', Number(e.target.value))} />
+                                                </div>
+                                                <div className="w-28">
+                                                    <input required type="number" step="0.01" min="0" placeholder="Price" className="w-full border-gray-200 border p-2 rounded-lg text-sm outline-none focus:border-blue-400" value={item.price} onChange={e => handleLineItemChange(index, 'price', Number(e.target.value))} />
+                                                </div>
+                                                {lineItems.length > 1 && <button type="button" onClick={() => removeLineItem(index)} className="p-2 text-red-400 hover:text-red-600 bg-red-50 rounded-lg shrink-0">✕</button>}
                                             </div>
-                                            <div className="w-20">
-                                                <input required type="number" min="1" placeholder="Qty" className="w-full border-gray-200 border p-2 rounded-lg text-sm outline-none focus:border-blue-400" value={item.quantity} onChange={e => handleLineItemChange(index, 'quantity', Number(e.target.value))} />
-                                            </div>
-                                            <div className="w-28">
-                                                <input required type="number" step="0.01" min="0" placeholder="Price" className="w-full border-gray-200 border p-2 rounded-lg text-sm outline-none focus:border-blue-400" value={item.price} onChange={e => handleLineItemChange(index, 'price', Number(e.target.value))} />
-                                            </div>
-                                            {lineItems.length > 1 && <button type="button" onClick={() => removeLineItem(index)} className="p-2 text-red-400 hover:text-red-600 bg-red-50 rounded-lg shrink-0">✕</button>}
-                                        </div>
-                                    ))}
+                                        ))}
+                                    </div>
+                                    <button type="button" onClick={addLineItem} className="text-[11px] font-bold text-blue-600 hover:text-blue-800 mt-2 ml-1">+ Add line item</button>
                                 </div>
-                                <button type="button" onClick={addLineItem} className="text-[11px] font-bold text-blue-600 hover:text-blue-800 mt-2 ml-1">+ Add line item</button>
+
+                                <div className="flex items-center gap-3 mt-4 p-3 bg-blue-50/50 rounded-xl border border-blue-100">
+                                    <input type="checkbox" id="gstToggle" checked={hasGst} onChange={e => setHasGst(e.target.checked)} className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer" />
+                                    <label htmlFor="gstToggle" className="text-sm font-bold text-blue-800 cursor-pointer select-none">Apply 10% GST to this Invoice</label>
+                                </div>
                             </div>
 
-                            <div className="bg-gray-50 p-4 rounded-xl flex justify-between items-center mt-4 border border-gray-100">
-                                <span className="text-sm font-bold text-gray-500 uppercase tracking-widest">Total Invoice Amount</span>
-                                <span className="text-2xl font-black text-gray-900">${calculateTotal().toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                            </div>
+                            <div className="p-6 pt-4 bg-white border-t border-gray-100 shrink-0">
+                                {hasGst && (
+                                    <div className="bg-gray-50 px-4 py-2 flex justify-between items-center border-x border-t border-gray-100 rounded-t-xl">
+                                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">GST (10%)</span>
+                                        <span className="text-sm font-bold text-gray-600">+ ${(calculateSubTotal() * 0.10).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                    </div>
+                                )}
+                                <div className={`bg-gray-50 p-4 flex justify-between items-center border border-gray-100 ${hasGst ? 'rounded-b-xl border-t-0' : 'rounded-xl'}`}>
+                                    <span className="text-sm font-bold text-gray-500 uppercase tracking-widest">Grand Total</span>
+                                    <span className="text-2xl font-black text-gray-900">${(calculateSubTotal() * (hasGst ? 1.1 : 1)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                </div>
 
-                            <div className="flex gap-3 pt-4 mt-2 border-t border-gray-100">
-                                <button type="button" onClick={closeModal} className="flex-1 bg-gray-100 p-3 rounded-xl font-bold text-gray-600 hover:bg-gray-200 transition">Cancel</button>
-                                <button type="submit" disabled={!modalClientId || calculateTotal() === 0} className="flex-1 bg-blue-600 p-3 rounded-xl font-bold text-white shadow-lg shadow-blue-200 hover:bg-blue-700 transition disabled:opacity-50">Save Invoice</button>
+                                <div className="flex gap-3 pt-4 mt-4">
+                                    <button type="button" onClick={closeModal} className="flex-1 bg-gray-100 p-3 rounded-xl font-bold text-gray-600 hover:bg-gray-200 transition">Cancel</button>
+                                    <button type="submit" disabled={!modalClientId} className="flex-1 bg-blue-600 p-3 rounded-xl font-bold text-white shadow-lg shadow-blue-200 hover:bg-blue-700 transition disabled:opacity-50">Save Invoice</button>
+                                </div>
                             </div>
                         </form>
                     </div>

@@ -8,10 +8,15 @@ import com.scalina.crm.service.CrmService;
 import com.scalina.crm.service.ProjectService;
 import com.scalina.crm.service.TaskService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/crm")
@@ -119,6 +124,18 @@ public class CrmController {
         return ResponseEntity.ok(crmService.getClientInvoices(clientId));
     }
 
+    @GetMapping("/invoices")
+    public ResponseEntity<List<Invoice>> getAllInvoices() {
+        return ResponseEntity.ok(crmService.getAllInvoices());
+    }
+
+    // 1. Update your PUT endpoint for editing invoices
+    @PutMapping("/invoices/{id}")
+    public ResponseEntity<Invoice> updateInvoice(@PathVariable Long id, @RequestBody Invoice invoice) {
+        return ResponseEntity.ok(crmService.updateInvoice(id, invoice));
+    }
+
+
     @PostMapping("/clients/{clientId}/invoices")
     public ResponseEntity<Invoice> createInvoice(@PathVariable Long clientId, @RequestBody Invoice invoice) {
         return ResponseEntity.ok(crmService.createInvoice(clientId, invoice));
@@ -174,4 +191,46 @@ public class CrmController {
     public ResponseEntity<Expense> createExpense(@RequestBody Expense expense) {
         return ResponseEntity.ok(crmService.createExpense(expense));
     }
+
+    @PostMapping(value = "/expenses/{id}/receipt", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Expense> uploadReceipt(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
+        try {
+            return ResponseEntity.ok(crmService.uploadReceipt(id, file));
+        } catch (Exception e) {
+            e.printStackTrace(); // This will print the exact Java error in your terminal!
+            return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @GetMapping("/expenses/{id}/receipt/download")
+    public ResponseEntity<byte[]> downloadReceipt(@PathVariable Long id) {
+        Expense expense = crmService.getExpenseById(id);
+
+        if (expense.getReceiptData() == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + expense.getReceiptFileName() + "\"")
+                .contentType(MediaType.parseMediaType(expense.getReceiptFileType()))
+                .body(expense.getReceiptData());
+    }
+
+    @PutMapping("/expenses/{id}")
+    public ResponseEntity<Expense> updateExpense(@PathVariable Long id, @RequestBody Expense expense) {
+        expense.setId(id);
+        return ResponseEntity.ok(crmService.updateExpense(expense));
+    }
+
+    @PatchMapping("/expenses/{id}/status")
+    public ResponseEntity<Expense> updateExpenseStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        return ResponseEntity.ok(crmService.updateExpenseStatus(id, body.get("status")));
+    }
+
+    @DeleteMapping("/expenses/{id}")
+    public ResponseEntity<Void> deleteExpense(@PathVariable Long id) {
+        crmService.deleteExpense(id);
+        return ResponseEntity.noContent().build();
+    }
+
 }

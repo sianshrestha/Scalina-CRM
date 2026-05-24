@@ -91,7 +91,7 @@ export const Dashboard: React.FC = () => {
         return true;
     };
 
-    const filteredInvoices = invoices.filter(i => isDateInPeriod(i.issueDate));
+    const filteredInvoices = invoices.filter(i => isDateInPeriod(i.invoiceDate));
     const filteredExpenses = expenses.filter(e => isDateInPeriod(e.expenseDate));
 
     // --- Financial Metrics Calculations ---
@@ -203,7 +203,7 @@ export const Dashboard: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-0 mt-2">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
                     <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                        <h3 className="font-bold text-gray-800">Upcoming Deadlines</h3>
+                        <h3 className="font-bold text-gray-800">Upcoming Project Deadlines</h3>
                         <span className="text-xs font-bold text-gray-400 uppercase">Next 5</span>
                     </div>
                     <div className="flex-1 overflow-y-auto p-2">
@@ -232,7 +232,7 @@ export const Dashboard: React.FC = () => {
 
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
                     <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                        <h3 className="font-bold text-gray-800">Pending Tasks</h3>
+                        <h3 className="font-bold text-gray-800">Upcoming Task Deadlines</h3>
                         <span className="text-xs font-bold text-gray-400 uppercase">Closest 5</span>
                     </div>
                     <div className="flex-1 overflow-y-auto p-2">

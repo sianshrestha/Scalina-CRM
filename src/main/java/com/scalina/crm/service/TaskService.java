@@ -129,25 +129,37 @@ public class TaskService {
     }
 
     private void handleFinancialAutomation(Task task) {
-        if (task.getTaskType() == TaskType.SCRIPT || task.getTaskType() == TaskType.SHOOT) {
+        if (task.getTaskType() == TaskType.SHOOT) {
 
             String memberName = task.getAssignee();
             LocalDate workDate = task.getTaskDate();
 
-            // Note: Updated to use the correct repository method name
+            // Look up by payee + date + type (matches what frontend checks)
             Optional<Expense> existingExpense = expenseRepository
-                    .findByTitleAndExpenseDateAndType(memberName, workDate, "Salary");
+                    .findByPayeeAndExpenseDateAndType(memberName, workDate, "Salary");
 
             if (existingExpense.isEmpty()) {
                 Expense newExpense = new Expense();
-                newExpense.setTitle(memberName);
-                newExpense.setType("Salary"); // Set Category
-                newExpense.setRecurring(false); // Set Recurring status correctly
+                // Use payee (used by frontend filters) and a clear title
+                newExpense.setTitle(memberName + " - SALARY");
+                newExpense.setPayee(memberName);
+                // Use consistent type string that frontend expects ('Salary')
+                newExpense.setType("Salary");
+                // amount required by DB; leave 0.0 so user can edit later
+                newExpense.setAmount(0.0);
                 newExpense.setExpenseDate(workDate);
-                newExpense.setPaid(false);
-
-                expenseRepository.save(newExpense);
+                newExpense.setPaid(false); // or setPaid(false) depending on your Lombok accessors
+                newExpense.setRecurring(false); // or setRecurring(false)
+                // Avoid letting this throw and roll back task completion: wrap persist in try/catch
+                try {
+                    expenseRepository.save(newExpense);
+                } catch (Exception ex) {
+                    // Log but do not rethrow — we do not want salary creation to break the task completion
+                    ex.printStackTrace();
+                    // optionally use a Logger: logger.error("Failed creating salary expense", ex);
+                }
             }
         }
     }
+
 }

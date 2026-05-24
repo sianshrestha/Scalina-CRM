@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.math.BigDecimal;
+
 @Entity
 @Getter
 @Setter
@@ -26,5 +28,16 @@ public class ClientLead extends BaseEntity{
     @Enumerated(EnumType.STRING)
     @Column(name = "pipeline_stage")
     private PipelineStage pipelineStage;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "marketer_id")
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    private TeamMember marketer;
+
+    @Column(name = "estimated_weekly_revenue")
+    private BigDecimal estimatedWeeklyRevenue;
+
+    @Column(name = "marketers_cut")
+    private BigDecimal marketersCut;
 
 }

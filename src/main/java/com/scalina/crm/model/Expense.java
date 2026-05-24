@@ -1,5 +1,7 @@
 package com.scalina.crm.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -13,28 +15,39 @@ import java.time.LocalDate;
 public class Expense extends BaseEntity {
 
     @Column(nullable = false)
-    private String title; // E.g., "Jane Doe - Base Pay" or "Adobe CC"
+    private String title;
 
     @Column(name = "expense_type", nullable = false)
-    private String type; // Frontend sends the category here (e.g., "Salary", "Software Subscription")
+    private String type; // Salary, Equipment, etc.
 
-    private String payee; // The team member name or vendor
-
-    private BigDecimal amount;
+    private String payee;
 
     @Column(nullable = false)
+    private Double amount;
+
+    @Column(name = "expense_date", nullable = false)
     private LocalDate expenseDate;
 
+    @JsonProperty("isPaid")
+    @Column(name = "is_paid", nullable = false)
+    private boolean isPaid;
+
+    @JsonProperty("isRecurring")
+    @Column(name = "is_recurring", nullable = false)
+    private boolean isRecurring;
+
+    private String frequency; // WEEKLY, MONTHLY
     private String reference;
 
-    @Column(columnDefinition = "TEXT") // CRITICAL: Base64 image strings are huge. You must use TEXT, not VARCHAR.
-    private String receiptUrl; // Matched to frontend's "receiptUrl"
+    // --- NEW RECEIPT STORAGE FIELDS ---
+    @Column(name = "receipt_file_name")
+    private String receiptFileName;
 
-    // false = Upcoming Payment, true = Make Payment clicked (moves to history)
-    private boolean isPaid = false;
+    @Column(name = "receipt_file_type")
+    private String receiptFileType;
 
-    // --- RECURRING LOGIC FIELDS ---
-    private boolean isRecurring = false; // Matched to frontend's boolean toggle
-
-    private String frequency; // Will store "WEEKLY" or "MONTHLY"
+    // JsonIgnore stops the massive byte array from crashing the frontend list
+    @JsonIgnore
+    @Column(name = "receipt_data")
+    private byte[] receiptData;
 }

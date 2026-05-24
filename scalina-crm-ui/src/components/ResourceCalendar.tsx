@@ -12,7 +12,7 @@ import {
     type Project,
     type Task,
     type TeamMember,
-    TaskType, fetchExpenses, createExpense
+    TaskType
 } from '../services/api';
 
 // Helper to get today's date in YYYY-MM-DD format based on local timezone
@@ -146,31 +146,6 @@ export const ResourceCalendar: React.FC = () => {
     const handleMarkDone = async (task: Task) => {
         if (window.confirm('Mark this task as completed?')) {
             await markTaskAsDone(task.id!);
-
-            // Check if it's a daily pay role
-            if (task.taskType === 'SCRIPT' || task.taskType === 'SHOOT') {
-                const existingExpenses = await fetchExpenses();
-
-                // Check if a salary expense already exists for this person on this day
-                const exists = existingExpenses.some(e =>
-                    e.type === 'Salary' &&
-                    e.payee === task.assignee &&
-                    e.expenseDate === task.taskDate
-                );
-
-                if (!exists) {
-                    await createExpense({
-                        title: `Daily Output - ${task.taskType}`,
-                        type: 'Salary',
-                        payee: task.assignee,
-                        expenseDate: task.taskDate,
-                        amount: 0, // Left at 0 for manual input later
-                        isPaid: false,
-                        isRecurring: false
-                    });
-                }
-            }
-
             loadAllTasks();
         }
     };
@@ -242,13 +217,24 @@ export const ResourceCalendar: React.FC = () => {
                             {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
                     </div>
+
+                    {/* UPDATED PROJECT SELECTION DROPDOWN */}
                     <div>
-                        <label className="block text-[11px] font-bold text-gray-400 uppercase mb-1">Project Code</label>
+                        <label className="block text-[11px] font-bold text-gray-400 uppercase mb-1">Project Week</label>
                         <select required className="w-full border-gray-200 border p-2.5 rounded-lg text-sm outline-none focus:border-blue-400 disabled:bg-gray-50" value={selectedProjectId} onChange={e => setSelectedProjectId(Number(e.target.value))} disabled={!selectedClientId}>
                             <option value="">Select...</option>
-                            {filteredProjects.map(p => <option key={p.id} value={p.id}>{p.projectCode}</option>)}
+                            {filteredProjects.map(p => {
+                                // Extract the week number (e.g., 'wk03' -> '3')
+                                const weekNum = p.weekCode ? p.weekCode.replace('wk', '').replace(/^0+/, '') : '??';
+                                return (
+                                    <option key={p.id} value={p.id}>
+                                        Week {weekNum}
+                                    </option>
+                                );
+                            })}
                         </select>
                     </div>
+
                     <div>
                         <label className="block text-[11px] font-bold text-gray-400 uppercase mb-1">Task Type</label>
                         <select required className="w-full border-gray-200 border p-2.5 rounded-lg text-sm outline-none focus:border-blue-400" value={taskType} onChange={e => { setTaskType(e.target.value as TaskType); setAssignee(''); }}>

@@ -20,11 +20,20 @@ public class Invoice extends BaseEntity {
     @Column(name = "invoice_date")
     private String invoiceDate;
 
-    // We keep amount for the Grand Total to make Dashboard queries fast
+    @Column(name = "due_date")
+    private String dueDate;
+
     private BigDecimal amount;
 
-    @Column(name = "cost_of_delivery")
-    private BigDecimal costOfDelivery;
+    @Column(name = "has_gst")
+    private Boolean hasGst;
+
+    @Column(name = "gst_amount")
+    private BigDecimal gstAmount;
+
+    private Integer weeksCovered;
+
+
 
     @Enumerated(EnumType.STRING)
     private InvoiceStatus status;

@@ -5,20 +5,11 @@ import {
     createExpense,
     updateExpense,
     updateExpenseStatus,
-    deleteExpense, // Make sure you added this to api.ts
+    deleteExpense,
+    uploadExpenseReceipt,
     type TeamMember,
     type Expense
 } from '../services/api';
-
-// Helper to turn uploaded images into usable Data URLs (Base64)
-const convertFileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = error => reject(error);
-    });
-};
 
 export const Expenses: React.FC = () => {
     const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -26,7 +17,7 @@ export const Expenses: React.FC = () => {
 
     // --- UI State ---
     const [modalStep, setModalStep] = useState<'NONE' | 'CHOOSE_TYPE' | 'FORM'>('NONE');
-    const [viewReceiptUrl, setViewReceiptUrl] = useState<string | null>(null);
+    const [viewingExpense, setViewingExpense] = useState<Expense | null>(null);
 
     // --- Filter, Sort & Analytics State ---
     const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
@@ -49,7 +40,7 @@ export const Expenses: React.FC = () => {
     const [expenseDate, setExpenseDate] = useState('');
     const [reference, setReference] = useState('');
     const [receiptFile, setReceiptFile] = useState<File | null>(null);
-    const [existingReceiptUrl, setExistingReceiptUrl] = useState<string | undefined>(undefined);
+    const [existingReceiptFileName, setExistingReceiptFileName] = useState<string | undefined>(undefined);
 
     async function loadExpenses() {
         const data = await fetchExpenses();
@@ -58,38 +49,39 @@ export const Expenses: React.FC = () => {
 
     useEffect(() => {
         fetchTeamMembers().then(setTeamMembers);
-        fetchExpenses().then(setExpenses);
+        loadExpenses();
     }, []);
 
     const handleSaveExpense = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        let finalReceiptUrl = existingReceiptUrl;
-        if (receiptFile) {
-            finalReceiptUrl = await convertFileToBase64(receiptFile);
-        }
-
         const payload = {
-            title: title,
-            type: category,
-            expenseDate: expenseDate,
+            title, type: category, expenseDate,
             payee: category === 'Salary' ? payee : title,
-            amount: Number(amount),
-            isPaid: false,
-            isRecurring: isRecurring,
-            frequency: isRecurring ? frequency : undefined, // Include frequency
-            reference: reference,
-            receiptUrl: finalReceiptUrl
+            amount: Number(amount), isPaid: false, isRecurring,
+            frequency: isRecurring ? frequency : undefined, reference
         };
 
-        if (editingExpenseId) {
-            await updateExpense(editingExpenseId, payload as Partial<Expense>);
-        } else {
-            await createExpense(payload as unknown as Expense);
-        }
+        try {
+            let targetId: number | null = editingExpenseId;
 
-        closeModal();
-        loadExpenses();
+            if (editingExpenseId) {
+                await updateExpense(editingExpenseId, payload as Partial<Expense>);
+            } else {
+                const newExp = await createExpense(payload as unknown as Expense);
+                targetId = newExp.id ?? null;
+            }
+
+            if (receiptFile && targetId) {
+                await uploadExpenseReceipt(targetId, receiptFile);
+            }
+
+            closeModal();
+            loadExpenses();
+        } catch (error) {
+            console.error("Save failed", error);
+            alert(error instanceof Error ? error.message : "Failed to save expense.");
+        }
     };
 
     const handleDeleteExpense = async (id: number) => {
@@ -126,26 +118,31 @@ export const Expenses: React.FC = () => {
         }
 
         if (window.confirm("Confirm payment? This will move the expense to History and affect Profit/Loss.")) {
-            await updateExpenseStatus(exp.id!, 'PAID');
+            try {
+                await updateExpenseStatus(exp.id!, 'PAID');
 
-            if (exp.isRecurring) {
-                // Generate next date based on Weekly or Monthly frequency
-                const nextDateStr = exp.frequency === 'WEEKLY' ? getNextWeekDate(exp.expenseDate) : getNextMonthDate(exp.expenseDate);
+                if (exp.isRecurring) {
+                    const nextDateStr = exp.frequency === 'WEEKLY' ? getNextWeekDate(exp.expenseDate) : getNextMonthDate(exp.expenseDate);
+                    await createExpense({
+                        title: exp.title,
+                        type: exp.type,
+                        payee: exp.payee,
+                        amount: exp.amount,
+                        expenseDate: nextDateStr,
+                        isPaid: false,
+                        isRecurring: true,
+                        frequency: exp.frequency,
+                        reference: exp.reference
+                    } as Expense);
+                }
 
-                await createExpense({
-                    title: exp.title,
-                    type: exp.type,
-                    payee: exp.payee,
-                    amount: exp.amount,
-                    expenseDate: nextDateStr,
-                    isPaid: false,
-                    isRecurring: true,
-                    frequency: exp.frequency, // Carry forward the frequency
-                    reference: exp.reference
-                } as Expense);
+                const freshExpenses = await fetchExpenses();
+                setExpenses(freshExpenses);
+                alert('✅ Payment successful! Expense moved to history.');
+            } catch (error) {
+                console.error('❌ Payment failed:', error);
+                alert(error instanceof Error ? `Payment failed: ${error.message}` : 'Failed to process payment. Please try again.');
             }
-
-            loadExpenses();
         }
     };
 
@@ -159,7 +156,7 @@ export const Expenses: React.FC = () => {
         setAmount(exp.amount === 0 ? '' : exp.amount);
         setExpenseDate(exp.expenseDate);
         setReference(exp.reference || '');
-        setExistingReceiptUrl(exp.receiptUrl);
+        setExistingReceiptFileName(exp.receiptFileName);
         setModalStep('FORM');
     };
 
@@ -175,7 +172,7 @@ export const Expenses: React.FC = () => {
         setExpenseDate('');
         setReference('');
         setReceiptFile(null);
-        setExistingReceiptUrl(undefined);
+        setExistingReceiptFileName(undefined);
     };
 
     const handleSort = (field: 'date' | 'amount') => {
@@ -198,7 +195,6 @@ export const Expenses: React.FC = () => {
     const currentMonth = today.getMonth();
     const currentYear = today.getFullYear();
 
-    // Pull ALL expenses for the period (Paid + Unpaid) for the Estimated Total
     const periodExpenses = expenses.filter(exp => {
         if (analyticsPeriod === 'ALL') return true;
 
@@ -220,7 +216,6 @@ export const Expenses: React.FC = () => {
     });
 
     const totalPaid = periodExpenses.filter(e => e.isPaid).reduce((sum, e) => sum + e.amount, 0);
-    // Estimated Expenses includes what has been paid PLUS what is coming up in the selected timeframe
     const estimatedExpenses = periodExpenses.reduce((sum, e) => sum + e.amount, 0);
 
     const categoryBreakdown = periodExpenses.filter(e => e.isPaid).reduce((acc, curr) => {
@@ -229,7 +224,6 @@ export const Expenses: React.FC = () => {
     }, {} as Record<string, number>);
 
     // --- TABLE FILTERING LOGIC ---
-    // SORTED: Closest deadline first (ascending order)
     const upcomingPayments = expenses
         .filter(e => !e.isPaid)
         .sort((a, b) => new Date(a.expenseDate).getTime() - new Date(b.expenseDate).getTime());
@@ -292,7 +286,7 @@ export const Expenses: React.FC = () => {
 
                                 <div className="text-xs text-gray-500 font-medium flex justify-between items-end">
                                     <span>Due: <span className="text-gray-800 font-bold">{exp.expenseDate}</span></span>
-                                    {exp.receiptUrl && <span className="text-blue-500 text-[10px] uppercase font-bold">🖼️ Receipt Attached</span>}
+                                    {exp.receiptFileName && <span className="text-blue-500 text-[10px] uppercase font-bold">🖼️ Receipt Attached</span>}
                                 </div>
 
                                 <div className="flex gap-2 mt-2">
@@ -303,6 +297,7 @@ export const Expenses: React.FC = () => {
                                     >
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                     </button>
+                                    <button onClick={() => setViewingExpense(exp)} className="px-4 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 font-bold rounded-lg transition text-xs border border-blue-100">View</button>
                                     <button onClick={() => openEditModal(exp)} className={`flex-1 font-bold py-2 rounded-lg transition text-xs ${exp.amount === 0 ? 'bg-red-500 text-white hover:bg-red-600 shadow' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                                         {exp.amount === 0 ? 'Set Amount' : 'Edit Details'}
                                     </button>
@@ -343,10 +338,7 @@ export const Expenses: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Updated Analytics Layout */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-
-                    {/* Total Paid Card */}
                     <div className="bg-red-50 p-5 rounded-xl shadow-sm border border-red-200 flex flex-col justify-center items-start">
                         <span className="text-[11px] font-bold text-red-500 uppercase tracking-widest mb-2 flex items-center gap-2">
                             Total Paid
@@ -354,7 +346,6 @@ export const Expenses: React.FC = () => {
                         <span className="text-3xl font-black text-red-700">${totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                     </div>
 
-                    {/* Estimated Expenses Card (Includes Upcoming) */}
                     <div className="bg-orange-50 p-5 rounded-xl shadow-sm border border-orange-200 flex flex-col justify-center items-start">
                         <span className="text-[11px] font-bold text-orange-500 uppercase tracking-widest mb-2 flex items-center gap-2">
                             Estimated Expenses
@@ -363,7 +354,6 @@ export const Expenses: React.FC = () => {
                         <span className="text-[10px] font-medium text-orange-600 mt-1">Includes unpaid upcoming</span>
                     </div>
 
-                    {/* Category Breakdown */}
                     <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex flex-col col-span-1 lg:col-span-2">
                         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">Category Breakdown (Paid)</span>
                         {Object.keys(categoryBreakdown).length === 0 ? (
@@ -384,7 +374,6 @@ export const Expenses: React.FC = () => {
 
             {/* EXPENSE HISTORY */}
             <div className="flex-1 flex flex-col min-h-0 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-
                 <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex flex-wrap gap-4 justify-between items-center">
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mr-2">Filter Categories:</span>
@@ -423,11 +412,12 @@ export const Expenses: React.FC = () => {
                             <th className="px-6 py-4 text-right cursor-pointer hover:text-blue-600" onClick={() => handleSort('amount')}>
                                 Amount {sortConfig.field === 'amount' ? (sortConfig.order === 'asc' ? '↑' : '↓') : ''}
                             </th>
+                            <th className="px-6 py-4 text-right">Actions</th>
                         </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                         {expenseHistory.length === 0 ? (
-                            <tr><td colSpan={6} className="text-center py-10 text-gray-400 text-sm">No expenses match your filters.</td></tr>
+                            <tr><td colSpan={7} className="text-center py-10 text-gray-400 text-sm">No expenses match your filters.</td></tr>
                         ) : (
                             expenseHistory.map((exp: any) => (
                                 <tr key={exp.id} className="hover:bg-gray-50 transition-colors">
@@ -437,26 +427,59 @@ export const Expenses: React.FC = () => {
                                         {exp.payee && exp.payee !== exp.title && <p className="text-[10px] text-gray-500 uppercase">{exp.payee}</p>}
                                     </td>
                                     <td className="px-6 py-4 text-xs font-medium text-gray-600 whitespace-nowrap">
-                                        <span className="px-2 py-1 rounded-md bg-gray-100 text-gray-600 font-bold text-[10px] uppercase tracking-widest border border-gray-200">
+                                        <span className="px-2 py-1 rounded-md bg-gray-100 text-gray-600 font-bold text-[10px] uppercase tracking-widest border border-gray-200 " >
                                             {exp.type}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-xs font-medium text-gray-500 whitespace-nowrap">{exp.isRecurring ? '🔄 Recurring' : 'One-Time'}</td>
+                                    {/* 1. TRUNCATED REFERENCE & RECEIPT COLUMN */}
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex flex-col items-start gap-1">
-                                            {exp.reference && <span className="text-[10px] font-mono bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">Ref: {exp.reference}</span>}
 
-                                            {exp.receiptUrl && (
-                                                <button onClick={() => setViewReceiptUrl(exp.receiptUrl!)} className="text-[10px] font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 transition">
-                                                    🖼️ View Receipt
-                                                </button>
+                                            {/* Added inline-block, max-w-[200px], and truncate to stop table stretching */}
+                                            {exp.reference && (
+                                                <span
+                                                    className="text-[10px] font-mono bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded max-w-[100px] xl:max-w-[100px] inline-block truncate"
+                                                    title="Click View to see full reference"
+                                                >
+                                                    Ref: {exp.reference}
+                                                </span>
                                             )}
 
-                                            {!exp.reference && !exp.receiptUrl && <span className="text-gray-300 text-xs">-</span>}
+                                            {exp.receiptFileName && (
+                                                <a
+                                                    href={`http://localhost:8080/api/crm/expenses/${exp.id}/receipt/download`}
+                                                    download={exp.receiptFileName}
+                                                    className="text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition flex items-center gap-1"
+                                                >
+                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                                    Download Receipt
+                                                </a>
+                                            )}
+
+                                            {!exp.reference && !exp.receiptFileName && <span className="text-gray-300 text-xs">-</span>}
                                         </div>
                                     </td>
+
+                                    {/* 2. AMOUNT COLUMN (Leave as is) */}
                                     <td className="px-6 py-4 text-sm font-black text-gray-900 text-right whitespace-nowrap">
                                         ${exp.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    </td>
+
+                                    {/* 3. UPDATED ACTIONS COLUMN (View & Delete only) */}
+                                    <td className="px-6 py-4 whitespace-nowrap text-right space-x-2">
+                                        <button
+                                            onClick={() => setViewingExpense(exp)}
+                                            className="text-[10px] font-bold text-gray-500 hover:text-white hover:bg-gray-500 border border-transparent hover:border-gray-600 px-3 py-1.5 rounded transition"
+                                        >
+                                            View
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteExpense(exp.id!)}
+                                            className="text-[10px] font-bold text-red-500 hover:text-white hover:bg-red-500 border border-transparent hover:border-red-600 px-3 py-1.5 rounded transition"
+                                        >
+                                            Delete
+                                        </button>
                                     </td>
                                 </tr>
                             ))
@@ -465,25 +488,6 @@ export const Expenses: React.FC = () => {
                     </table>
                 </div>
             </div>
-
-            {/* RECEIPT VIEWER (LIGHTBOX) */}
-            {viewReceiptUrl && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60]" onClick={() => setViewReceiptUrl(null)}>
-                    <div className="bg-white p-2 rounded-xl shadow-2xl max-w-4xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-                        <div className="flex justify-between items-center p-3 border-b border-gray-100">
-                            <h3 className="font-bold text-gray-800">Receipt Viewer</h3>
-                            <button onClick={() => setViewReceiptUrl(null)} className="text-gray-400 hover:text-gray-800 font-bold bg-gray-100 px-3 py-1 rounded-md text-sm transition">✕ Close</button>
-                        </div>
-                        <div className="p-4 overflow-auto flex justify-center items-center flex-1">
-                            {viewReceiptUrl.startsWith('data:image') ? (
-                                <img src={viewReceiptUrl} alt="Receipt" className="max-w-full max-h-[75vh] object-contain rounded-lg border border-gray-200" />
-                            ) : (
-                                <p className="text-gray-500 text-sm">Cannot display this file type directly.</p>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* MODAL 1: CHOOSE TYPE */}
             {modalStep === 'CHOOSE_TYPE' && (
@@ -524,7 +528,6 @@ export const Expenses: React.FC = () => {
                         </div>
 
                         <form onSubmit={handleSaveExpense} className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
-
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Category</label>
@@ -533,6 +536,7 @@ export const Expenses: React.FC = () => {
                                         <option value="Software Subscription">Software Subscription</option>
                                         <option value="Equipment">Equipment</option>
                                         <option value="Travel">Travel</option>
+                                        <option value="Commission">Commission</option>
                                         <option value="Others">Others</option>
                                     </select>
                                 </div>
@@ -579,12 +583,12 @@ export const Expenses: React.FC = () => {
 
                             <div>
                                 <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Receipt Photo Upload</label>
-                                {existingReceiptUrl && !receiptFile && (
+                                {existingReceiptFileName && !receiptFile && (
                                     <div className="mb-2 text-xs font-bold text-green-600 bg-green-50 p-2 rounded flex items-center gap-2">
-                                        <span>✓ Receipt already attached</span>
+                                        <span>✓ Receipt {existingReceiptFileName} attached</span>
                                     </div>
                                 )}
-                                <input type="file" accept="image/*" className="w-full border-gray-200 border p-2 rounded-xl text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition cursor-pointer" onChange={e => setReceiptFile(e.target.files ? e.target.files[0] : null)} />
+                                <input type="file" accept="image/*,application/pdf" className="w-full border-gray-200 border p-2 rounded-xl text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition cursor-pointer" onChange={e => setReceiptFile(e.target.files ? e.target.files[0] : null)} />
                             </div>
 
                             <div className="flex gap-3 pt-4 mt-2 border-t border-gray-100">
@@ -592,6 +596,55 @@ export const Expenses: React.FC = () => {
                                 <button type="submit" className="flex-1 bg-blue-600 p-3 rounded-xl font-bold text-white shadow-lg shadow-blue-200 hover:bg-blue-700 transition">Save Details</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* VIEW EXPENSE MODAL */}
+            {viewingExpense && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+                    <div className="bg-white p-8 rounded-2xl w-[500px] shadow-2xl flex flex-col">
+                        <div className="flex justify-between items-start mb-6">
+                            <div>
+                                <h3 className="text-xl font-bold text-gray-800">{viewingExpense.title}</h3>
+                                <span className="text-[10px] font-bold uppercase text-gray-500 tracking-widest">{viewingExpense.type}</span>
+                            </div>
+                            <button onClick={() => setViewingExpense(null)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
+                        </div>
+
+                        <div className="space-y-4 text-sm text-gray-700">
+                            <div className="flex justify-between border-b border-gray-100 pb-2">
+                                <span className="font-bold text-gray-400 uppercase text-[10px]">Amount</span>
+                                <span className="font-black text-gray-900">${viewingExpense.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="flex justify-between border-b border-gray-100 pb-2">
+                                <span className="font-bold text-gray-400 uppercase text-[10px]">Date</span>
+                                <span>{viewingExpense.expenseDate}</span>
+                            </div>
+                            <div className="flex justify-between border-b border-gray-100 pb-2">
+                                <span className="font-bold text-gray-400 uppercase text-[10px]">Payee</span>
+                                <span>{viewingExpense.payee || '—'}</span>
+                            </div>
+                            <div className="flex justify-between border-b border-gray-100 pb-2">
+                                <span className="font-bold text-gray-400 uppercase text-[10px]">Status</span>
+                                <span className={viewingExpense.isPaid ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>{viewingExpense.isPaid ? 'Paid' : 'Pending'}</span>
+                            </div>
+                            <div className="flex justify-between border-b border-gray-100 pb-2">
+                                <span className="font-bold text-gray-400 uppercase text-[10px]">Frequency</span>
+                                <span>{viewingExpense.isRecurring ? `Recurring (${viewingExpense.frequency})` : 'One-Time'}</span>
+                            </div>
+                            <div className="border-b border-gray-100 pb-2">
+                                <span className="block font-bold text-gray-400 uppercase text-[10px] mb-2">Reference / Notes</span>
+                                <p className="whitespace-pre-line bg-gray-50 p-4 rounded-lg border border-gray-100 text-xs text-gray-600 leading-relaxed">{viewingExpense.reference || 'No specific notes or references provided for this expense.'}</p>
+                            </div>
+                            {viewingExpense.receiptFileName && (
+                                <div className="pt-2 flex items-center">
+                                    <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest bg-blue-50 px-3 py-1.5 rounded border border-blue-100">
+                                        🖼️ Receipt Attached: {viewingExpense.receiptFileName}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}

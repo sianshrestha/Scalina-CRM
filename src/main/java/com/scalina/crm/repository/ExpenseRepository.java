@@ -12,6 +12,9 @@ import java.util.Optional;
 @Repository
 public interface ExpenseRepository extends JpaRepository<Expense, Long> {
     Optional<Expense> findByTitleAndExpenseDateAndType(String title, LocalDate expenseDate, String type);
+    // Add this method to the interface (alongside existing findByTitleAndExpenseDateAndType)
+    Optional<Expense> findByPayeeAndExpenseDateAndType(String payee, LocalDate expenseDate, String type);
+
 
     @Query("SELECT COALESCE(SUM(e.amount), 0) FROM Expense e WHERE e.isPaid = true")
     BigDecimal getTotalExpenses();

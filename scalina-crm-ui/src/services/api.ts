@@ -1,13 +1,35 @@
-// src/services/api.ts
 const API_BASE_URL = 'http://localhost:8080/api/crm';
 
-// @ts-ignore
-export enum PipelineStage { NEW = 'NEW', CONTACTED = 'CONTACTED', PROPOSAL_SENT = 'PROPOSAL_SENT', ACTIVE = 'ACTIVE' , INACTIVE = 'INACTIVE' }
-// @ts-ignore
-export enum InvoiceStatus { DRAFT = 'DRAFT', DUE = 'DUE', PAID = 'PAID', OVERDUE = 'OVERDUE' }
-// @ts-ignore
-export enum TaskType { SCRIPT = 'SCRIPT', SHOOT = 'SHOOT', EDIT = 'EDIT' }
+// --- ENUMS ---
+// --- ENUMS (Converted for erasableSyntaxOnly compatibility) ---
+export const PipelineStage = {
+    NEW: 'NEW',
+    CONTACTED: 'CONTACTED',
+    PROPOSAL_SENT: 'PROPOSAL_SENT',
+    ACTIVE: 'ACTIVE',
+    INACTIVE: 'INACTIVE'
+} as const;
 
+export type PipelineStage = typeof PipelineStage[keyof typeof PipelineStage];
+
+export const InvoiceStatus = {
+    DRAFT: 'DRAFT',
+    SENT: 'SENT',
+    PAID: 'PAID',
+    OVERDUE: 'OVERDUE'
+} as const;
+
+export type InvoiceStatus = typeof InvoiceStatus[keyof typeof InvoiceStatus];
+
+export const TaskType = {
+    SCRIPT: 'SCRIPT',
+    SHOOT: 'SHOOT',
+    EDIT: 'EDIT'
+} as const;
+
+export type TaskType = typeof TaskType[keyof typeof TaskType];
+
+// --- INTERFACES ---
 export interface ClientLead {
     id?: number;
     clientCode?: string;
@@ -20,6 +42,9 @@ export interface ClientLead {
     abn?: string;
     pipelineStage: PipelineStage;
     client: boolean;
+    marketer?: TeamMember;
+    estimatedWeeklyRevenue?: number;
+    marketersCut?: number;
 }
 
 export interface Project {
@@ -70,71 +95,26 @@ export interface TeamMember {
     emergencyContactNumber?: string;
 }
 
-export interface DashboardMetrics {
-    totalLeads?: number;
-    activeClients?: number;
-    activeProjects?: number;
-    pendingTasks?: number;
-    completedTasks?: number;
-    totalRevenue?: number;
-    [key: string]: any;
-}
-
-// --- ACTUAL API CALLS ---
-const fetcher = async (url: string, options?: RequestInit) => {
-    const res = await fetch(`${API_BASE_URL}${url}`, options);
-    if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(errorText || `API Error: ${res.status} ${res.statusText}`);
-    }
-    if (res.status === 204) return null;
-
-    const text = await res.text();
-    return text ? JSON.parse(text) : null;
-};
-
-export const fetchDashboardMetrics = () => fetcher('/dashboard');
-export const fetchPipeline = () => fetcher('/pipeline');
-export const saveClientLead = (lead: ClientLead) => fetcher('/pipeline', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lead) });
-
-export const fetchClientProjects = (clientId: number) => fetcher(`/clients/${clientId}/projects`);
-export const fetchAllProjects = () => fetcher('/projects');
-export const createProject = (projectReq: any) => fetcher('/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(projectReq) });
-export const updateProject = (projectId: number, projectReq: any) => fetcher(`/projects/${projectId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(projectReq) });
-export const cancelProject = (projectId: number) => fetcher(`/projects/${projectId}/cancel`, { method: 'PUT' });
-
-export const fetchAllTasks = () => fetcher('/tasks');
-export const fetchProjectTasks = (projectId: number) => fetcher(`/projects/${projectId}/tasks`);
-export const assignTask = (projectId: number, task: Task) => fetcher(`/projects/${projectId}/tasks`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(task) });
-export const markTaskAsDone = (taskId: number) => fetcher(`/tasks/${taskId}/done`, { method: 'PUT' });
-export const updateTaskDate = (taskId: number, newDate: string) => fetcher(`/tasks/${taskId}/date?newDate=${newDate}`, { method: 'PATCH' });
-export const fetchTeamMembers = () => fetcher('/team');
-export const updateTeamMember = (id: number, member: TeamMember) => fetcher(`/team/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(member) });
-
-
-// ==========================================
-// TEMPORARY IN-MEMORY MOCK APIS
-// (Replace these with standard fetcher calls once Spring Boot is ready)
-// ==========================================
-
 export interface InvoiceItem {
     description: string;
     quantity: number;
     price: number;
+    total?: number;
 }
 
 export interface Invoice {
     id?: number;
-    invoiceNumber: string;
-    clientId: number;
-    clientName?: string;
-    projectId?: number;
-    projectCode?: string;
+    invoiceNo?: string;        // Database uses invoice_no
+    clientId?: number;
+    client?: ClientLead;       // Backend returns the full client object here!
     amount: number;
-    issueDate: string;
-    dueDate: string;
-    status: 'DRAFT' | 'SENT' | 'PAID' | 'OVERDUE';
-    items?: InvoiceItem[]; // Added for line items
+    invoiceDate: string;
+    dueDate?: string;
+    hasGst?: boolean;
+    weeksCovered?: number;
+    gstAmount?: number;
+    status: string;
+    items?: InvoiceItem[];
 }
 
 export interface Expense {
@@ -147,56 +127,71 @@ export interface Expense {
     isPaid: boolean;
     isRecurring?: boolean;
     reference?: string;
-    receiptUrl?: string;
+    receiptFileName?: string;
+    frequency?: string;
 }
 
-// In-Memory Databases
-let mockInvoices: Invoice[] = [];
-let mockExpenses: Expense[] = [];
-let invoiceIdCounter = 1;
-let expenseIdCounter = 1;
+// --- ACTUAL API CALLS (Connected to Spring Boot/Postgres) ---
+const fetcher = async (url: string, options?: RequestInit) => {
+    const res = await fetch(`${API_BASE_URL}${url}`, options);
+    if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || `API Error: ${res.status} ${res.statusText}`);
+    }
+    if (res.status === 204) return null;
 
-// Invoice Mocks
-export const fetchInvoices = async (): Promise<Invoice[]> => {
-    return [...mockInvoices];
-};
-export const createInvoice = async (invoice: Partial<Invoice>) => {
-    const newInvoice = { ...invoice, id: invoiceIdCounter++ } as Invoice;
-    mockInvoices.push(newInvoice);
-    return newInvoice;
-};
-export const updateInvoiceStatus = async (id: number, status: string) => {
-    const inv = mockInvoices.find(i => i.id === id);
-    if (inv) inv.status = status as 'DRAFT' | 'SENT' | 'PAID' | 'OVERDUE';
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
 };
 
-// Expense Mocks
-export const fetchExpenses = async (): Promise<Expense[]> => {
-    return [...mockExpenses];
-};
-export const createExpense = async (expense: Partial<Expense>) => {
-    const newExp = { ...expense, id: expenseIdCounter++ } as Expense;
-    mockExpenses.push(newExp);
-    return newExp;
-};
-export const updateExpenseStatus = async (id: number, status: string) => {
-    const exp = mockExpenses.find(e => e.id === id);
-    if (exp) exp.isPaid = (status === 'PAID');
-};
-export const updateExpense = async (id: number, expense: Partial<Expense>) => {
-    const expIndex = mockExpenses.findIndex(e => e.id === id);
-    if (expIndex > -1) mockExpenses[expIndex] = { ...mockExpenses[expIndex], ...expense };
-};
+// Dashboard
+export const fetchDashboardMetrics = () => fetcher('/dashboard');
 
-export const updateInvoice = async (id: number, invoice: Partial<Invoice>) => {
-    const invIndex = mockInvoices.findIndex(i => i.id === id);
-    if (invIndex > -1) mockInvoices[invIndex] = { ...mockInvoices[invIndex], ...invoice };
-};
+// Pipeline
+export const fetchPipeline = () => fetcher('/pipeline');
+export const saveClientLead = (lead: ClientLead) => fetcher('/pipeline', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lead) });
 
+// Projects & Tasks
+export const fetchClientProjects = (clientId: number) => fetcher(`/clients/${clientId}/projects`);
+export const fetchAllProjects = () => fetcher('/projects');
+export const createProject = (projectReq: any) => fetcher('/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(projectReq) });
+export const updateProject = (projectId: number, projectReq: any) => fetcher(`/projects/${projectId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(projectReq) });
+export const cancelProject = (projectId: number) => fetcher(`/projects/${projectId}/cancel`, { method: 'PUT' });
+
+export const fetchAllTasks = () => fetcher('/tasks');
+export const fetchProjectTasks = (projectId: number) => fetcher(`/projects/${projectId}/tasks`);
+export const assignTask = (projectId: number, task: Task) => fetcher(`/projects/${projectId}/tasks`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(task) });
+export const markTaskAsDone = (taskId: number) => fetcher(`/tasks/${taskId}/done`, { method: 'PUT' });
+export const updateTaskDate = (taskId: number, newDate: string) => fetcher(`/tasks/${taskId}/date?newDate=${newDate}`, { method: 'PATCH' });
+export const deleteTask = (id: number) => fetcher(`/tasks/${id}`, { method: 'DELETE' });
+
+// Team
+export const fetchTeamMembers = () => fetcher('/team');
 export const createTeamMember = (member: TeamMember) => fetcher('/team', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(member) });
+export const updateTeamMember = (id: number, member: TeamMember) => fetcher(`/team/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(member) });
 export const deleteTeamMember = (id: number) => fetcher(`/team/${id}`, { method: 'DELETE' });
 
-export const deleteTask = (id: number) => fetcher(`/tasks/${id}`, { method: 'DELETE' });
-export const deleteExpense = async (id: number) => {
-    mockExpenses = mockExpenses.filter(exp => exp.id !== id);
+// Invoices (Real Endpoints)
+export const fetchInvoices = () => fetcher('/invoices'); // Ensure you add this to CrmController in Java!
+export const createInvoice = (clientId: number, invoice: Partial<Invoice>) => fetcher(`/clients/${clientId}/invoices`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) });
+export const updateInvoice = (id: number, invoice: Partial<Invoice>) => fetcher(`/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) });
+export const updateInvoiceStatus = (id: number, status: string) => fetcher(`/invoices/${id}/status?status=${status}`, { method: 'PATCH' });
+
+// Expenses & Receipts (Real Endpoints)
+export const fetchExpenses = () => fetcher('/expenses');
+export const createExpense = (expense: Partial<Expense>) => fetcher('/expenses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(expense) });
+export const updateExpense = (id: number, expense: Partial<Expense>) => fetcher(`/expenses/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(expense) });
+export const updateExpenseStatus = (id: number, status: string) => fetcher(`/expenses/${id}/status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
+export const deleteExpense = (id: number) => fetcher(`/expenses/${id}`, { method: 'DELETE' });
+
+export const uploadExpenseReceipt = async (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const res = await fetch(`${API_BASE_URL}/expenses/${id}/receipt`, {
+        method: 'POST',
+        body: formData // No Content-Type header needed for FormData
+    });
+    if (!res.ok) throw new Error('Upload failed');
+    return res.json();
 };
