@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # 1. POSTGRESQL DATABASE
+  db:
+    image: postgres:15-alpine
+    container_name: scalina_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: scalina_crm
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data  # This permanently saves the data and receipts
+    restart: unless-stopped
+
+  # 2. SPRING BOOT BACKEND
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: scalina_backend
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/scalina_crm
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=password
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  # 3. REACT FRONTEND
+  frontend:
+    build:
+      context: ./scalina-crm-ui
+      dockerfile: Dockerfile
+    container_name: scalina_frontend
+    ports:
+      - "3000:80"  # Maps localhost:3000 to the container
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+# Declare the persistent volume for the database
+volumes:
+  pgdata:

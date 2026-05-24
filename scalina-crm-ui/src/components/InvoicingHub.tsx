@@ -11,7 +11,7 @@ import {
     type InvoiceItem
 } from '../services/api';
 
-import logoImg from '../assets/Scalina Media.png';
+import logoImg from '../assets/scalina-media.png';
 import signatureImg from '../assets/signature.png';
 
 // --- PIXEL-PERFECT PDF STYLES ---

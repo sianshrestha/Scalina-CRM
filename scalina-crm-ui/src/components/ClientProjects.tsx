@@ -1,33 +1,18 @@
 // src/components/ClientProjects.tsx
 import { useEffect, useState } from 'react';
 import {
-    type ClientLead, type Project, type Task,
+    type ClientLead, type Project,
     fetchClientProjects, createProject,
-    updateProject, fetchProjectTasks, createTask, updateTask
+    updateProject,
 } from '../services/api';
 
 // --- SUB-COMPONENT FOR TASKS ---
 const ProjectCard = ({ project }: { project: Project }) => {
-    const [tasks, setTasks] = useState<Task[]>([]);
-    const [title, setTitle] = useState('');
-    const [assignee, setAssignee] = useState('');
+
     const [isEditingName, setIsEditingName] = useState(false);
-    const [projectName, setProjectName] = useState(project.name);
+    const [projectName, setProjectName] = useState(project.projectCode);
 
-    useEffect(() => { fetchProjectTasks(project.id!).then(setTasks); }, [project.id]);
 
-    const handleAddTask = async () => {
-        if (!title) return;
-        const t = await createTask(project.id!, { title, assignee, completed: false });
-        setTasks([...tasks, t]);
-        setTitle('');
-        setAssignee('');
-    };
-
-    const handleToggleTask = async (task: Task) => {
-        const updated = await updateTask(task.id!, { ...task, completed: !task.completed });
-        setTasks(tasks.map(t => t.id === task.id ? updated : t));
-    };
 
     const handleSaveProjectName = async () => {
         await updateProject(project.id!, { ...project, name: projectName });
@@ -48,24 +33,9 @@ const ProjectCard = ({ project }: { project: Project }) => {
                         <button onClick={() => setIsEditingName(true)} className="text-gray-400 hover:text-indigo-600 text-xs cursor-pointer">✎ Rename</button>
                     </div>
                 )}
-                <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-bold">{project.status}</span>
+                <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-bold">{project.overallProjectStatus}</span>
             </div>
 
-            <div className="mb-4">
-                {tasks.map(t => (
-                    <div key={t.id} className="flex items-center gap-2 mb-2 bg-gray-50 p-2 rounded">
-                        <input type="checkbox" className="w-4 h-4 cursor-pointer" checked={t.completed} onChange={() => handleToggleTask(t)} />
-                        <span className={`text-sm ${t.completed ? 'line-through text-gray-400' : 'text-gray-700'}`}>{t.title}</span>
-                        {t.assignee && <span className="ml-auto text-xs bg-indigo-100 text-indigo-800 px-2 rounded-full font-semibold">{t.assignee}</span>}
-                    </div>
-                ))}
-            </div>
-
-            <div className="flex gap-2">
-                <input placeholder="New Task..." className="border p-1 text-sm rounded flex-grow" value={title} onChange={e => setTitle(e.target.value)} />
-                <input placeholder="Assign To" className="border p-1 text-sm rounded w-1/4" value={assignee} onChange={e => setAssignee(e.target.value)} />
-                <button onClick={handleAddTask} className="bg-gray-800 text-white px-3 text-sm rounded hover:bg-gray-900 cursor-pointer">Add</button>
-            </div>
         </div>
     );
 };
@@ -81,7 +51,7 @@ export default function ClientProjects({ client, onBack }: { client: ClientLead,
 
     const handleAddProject = async () => {
         if (!newProjectName) return;
-        const p = await createProject(client.id!, { name: newProjectName, status: 'ACTIVE' });
+        const p = await createProject(client.id!);
         setProjects([...projects, p]);
         setNewProjectName('');
     };
@@ -94,7 +64,7 @@ export default function ClientProjects({ client, onBack }: { client: ClientLead,
                 <div>
                     <h2 className="text-3xl font-bold text-gray-800 mb-2">
                         {/* Display custom client ID if it exists */}
-                        {client.clientIdCode && <span className="text-indigo-600 mr-3">[{client.clientIdCode}]</span>}
+                        {client.clientCode && <span className="text-indigo-600 mr-3">[{client.clientCode}]</span>}
                         {client.company}
                     </h2>
                     <p className="text-gray-500 mb-2">{client.name} | {client.email} | {client.phone}</p>

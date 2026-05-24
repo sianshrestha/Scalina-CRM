@@ -1,0 +1,6 @@
+target/
+scalina-crm-ui/node_modules/
+scalina-crm-ui/dist/
+.git/
+.idea/
+*.iml
