@@ -24,7 +24,7 @@ export const KanbanBoard: React.FC = () => {
     // --- Form UI State ---
     const [clientType, setClientType] = useState<string>('');
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
-    const [emailList, setEmailList] = useState<DynamicEmail[]>([{ address: '', isBilling: false }]);
+    const [emailList, setEmailList] = useState<DynamicEmail[]>([{ address: '', isBilling: true }]);
     const [phoneList, setPhoneList] = useState<string[]>(['']);
     const [selectedMarketerId, setSelectedMarketerId] = useState<number | ''>('');
 
@@ -122,10 +122,10 @@ export const KanbanBoard: React.FC = () => {
                 if (lead.email && (lead.email.startsWith('[') || lead.email.startsWith('{'))) {
                     setEmailList(JSON.parse(lead.email));
                 } else {
-                    setEmailList([{ address: lead.email || '', isBilling: false }]);
+                    setEmailList([{ address: lead.email || '', isBilling: true }]);
                 }
             } catch {
-                setEmailList([{ address: lead.email || '', isBilling: false }]);
+                setEmailList([{ address: lead.email || '', isBilling: true }]);
             }
 
             try {
@@ -141,7 +141,7 @@ export const KanbanBoard: React.FC = () => {
             setEditingLead({ name: '', company: '', email: '', pipelineStage: PipelineStage.NEW, client: false, clientCode: '', tags: '', address: '', abn: '', phone: '' });
             setClientType('');
             setSelectedTags([]);
-            setEmailList([{ address: '', isBilling: false }]);
+            setEmailList([{ address: '', isBilling: true }]);
             setPhoneList(['']);
             setSelectedMarketerId('');
         }
@@ -149,18 +149,33 @@ export const KanbanBoard: React.FC = () => {
     };
 
     // --- Dynamic Inputs Arrays Operations ---
-    const handleAddEmail = () => setEmailList([...emailList, { address: '', isBilling: false }]);
-    const handleRemoveEmail = (index: number) => setEmailList(emailList.filter((_, i) => i !== index));
+    const handleAddEmail = () => {
+        // If it's the only email being added, force it to be the billing email
+        setEmailList([...emailList, { address: '', isBilling: emailList.length === 0 }]);
+    };
+
+    const handleRemoveEmail = (index: number) => {
+        const updated = emailList.filter((_, i) => i !== index);
+        // SAFETY NET: If they just deleted the specific email marked as 'Billing',
+        // automatically assign the new first email to be the billing email.
+        if (emailList[index].isBilling && updated.length > 0) {
+            updated[0].isBilling = true;
+        }
+        setEmailList(updated);
+    };
+
     const handleEmailChange = (index: number, value: string) => {
         const updated = [...emailList];
         updated[index].address = value;
         setEmailList(updated);
     };
+
     const toggleBillingEmail = (index: number) => {
         const updated = [...emailList];
-        updated[index].isBilling = !updated[index].isBilling;
+        updated[index].isBilling = !updated[index].isBilling; // Toggle the selected email's billing status
         setEmailList(updated);
     };
+
 
     const handleAddPhone = () => setPhoneList([...phoneList, '']);
     const handleRemovePhone = (index: number) => setPhoneList(phoneList.filter((_, i) => i !== index));
@@ -196,6 +211,8 @@ export const KanbanBoard: React.FC = () => {
         }
 
         const finalTags = [clientType, ...selectedTags].filter(Boolean).join(', ');
+
+        // Clean up empty fields before saving
         const finalEmailsJson = JSON.stringify(emailList.filter(em => em.address.trim()));
         const finalPhonesJson = JSON.stringify(phoneList.filter(ph => ph.trim()));
 
@@ -558,7 +575,7 @@ export const KanbanBoard: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Client Code</label>
-                                    <input className="w-full border-gray-200 border p-3 rounded-xl outline-none focus:border-blue-400 transition font-mono uppercase tracking-widest text-center placeholder:font-sans" placeholder="e.g. AB01" value={editingLead.clientCode || ''} onChange={e => setEditingLead({...editingLead, clientCode: e.target.value.toUpperCase()})} />
+                                    <input className="w-full border-gray-200 border p-3 rounded-xl outline-none focus:border-blue-400 transition font-mono uppercase tracking-widest text-center placeholder:font-sans" value={editingLead.clientCode || ''} onChange={e => setEditingLead({...editingLead, clientCode: e.target.value.toUpperCase()})} />
                                 </div>
 
                             </div>
@@ -577,7 +594,9 @@ export const KanbanBoard: React.FC = () => {
                                 <label className="block text-[10px] font-bold text-gray-400 uppercase ml-1">Email Addresses</label>
                                 {emailList.map((email, idx) => (
                                     <div key={idx} className="flex gap-2 items-center">
-                                        <input type="email" placeholder="contact@company.com" className="flex-1 border-gray-200 border p-2.5 rounded-xl text-sm outline-none focus:border-blue-400 transition" value={email.address} onChange={e => handleEmailChange(idx, e.target.value)} />
+                                        <input type="email" className="flex-1 border-gray-200 border p-2.5 rounded-xl text-sm outline-none focus:border-blue-400 transition" value={email.address} onChange={e => handleEmailChange(idx, e.target.value)} />
+
+                                        {/* THE FIX IS HERE: toggleBillingEmail completely updates the state array. */}
                                         <button
                                             type="button"
                                             onClick={() => toggleBillingEmail(idx)}
@@ -586,6 +605,7 @@ export const KanbanBoard: React.FC = () => {
                                         >
                                             Invoicing
                                         </button>
+
                                         {emailList.length > 1 && (
                                             <button type="button" onClick={() => handleRemoveEmail(idx)} className="p-2.5 text-red-400 bg-red-50 hover:text-red-600 rounded-xl transition">✕</button>
                                         )}

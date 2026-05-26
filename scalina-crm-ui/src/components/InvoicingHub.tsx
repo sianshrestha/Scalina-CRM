@@ -63,10 +63,12 @@ const pdfStyles = StyleSheet.create({
     tableRow: { flexDirection: 'row', paddingVertical: 10 },
     tableBottomLine: { borderTopWidth: 1, borderTopColor: '#cccccc', marginTop: 4 },
 
-    colDesc: { width: '52%' },
+    colSn: { width: '8%', textAlign: 'center' },
+    colDesc: { width: '44%' },
     colQty: { width: '16%', textAlign: 'center' },
     colPrice: { width: '16%', textAlign: 'right' },
     colTotal: { width: '16%', textAlign: 'right' },
+
 
     // ── BANK DETAILS + TOTALS side-by-side ───────────────────────────────────
     // Outer row: left=bank details, right=totals — both start at the same top edge
@@ -172,21 +174,25 @@ const InvoiceDocument = ({ invoice, client }: { invoice: any, client: any }) => 
 
                     {/* Header row */}
                     <View style={pdfStyles.tableHeader}>
+                        <Text style={[pdfStyles.colSn, pdfStyles.tableHeaderCol]}>S/N</Text>
                         <Text style={[pdfStyles.colDesc, pdfStyles.tableHeaderCol]}>DESCRIPTION</Text>
                         <Text style={[pdfStyles.colQty, pdfStyles.tableHeaderCol]}>QTY</Text>
                         <Text style={[pdfStyles.colPrice, pdfStyles.tableHeaderCol]}>PRICE</Text>
                         <Text style={[pdfStyles.colTotal, pdfStyles.tableHeaderCol]}>TOTAL</Text>
                     </View>
 
+
                     {/* Data rows */}
                     {invoice.items && invoice.items.map((item: any, index: number) => (
                         <View key={index} style={pdfStyles.tableRow}>
+                            <Text style={pdfStyles.colSn}>{index + 1}</Text>
                             <Text style={pdfStyles.colDesc}>{item.description}</Text>
                             <Text style={pdfStyles.colQty}>{item.quantity}</Text>
                             <Text style={pdfStyles.colPrice}>{formatMoney(item.price)}</Text>
                             <Text style={pdfStyles.colTotal}>{formatMoney(item.quantity * item.price)}</Text>
                         </View>
                     ))}
+
 
                     {/* Bottom border line */}
                     <View style={pdfStyles.tableBottomLine} />
@@ -397,7 +403,7 @@ export const InvoicingHub = () => {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `Invoice_${matchedClient?.clientCode || 'UNKNOWN'}_${inv.invoiceNo}.pdf`;
+            a.download = `Inv${inv.invoiceNo}_${matchedClient?.clientCode || 'UNKNOWN'}.pdf`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);

@@ -76,34 +76,33 @@ public class CrmService {
         return clientLeadRepository.findAll();
     }
 
+    @Transactional
     public ClientLead saveClientLead(ClientLead clientLead) {
+        // --- THE FIX: Convert empty strings to null to prevent Unique Constraint crashes ---
+        if (clientLead.getClientCode() != null && clientLead.getClientCode().trim().isEmpty()) {
+            clientLead.setClientCode(null);
+        }
+
         if (clientLead.getId() != null) {
             ClientLead existing = clientLeadRepository.findById(clientLead.getId())
                     .orElseThrow(() -> new RuntimeException("Lead not found"));
 
-            if (clientLead.getName() != null) existing.setName(clientLead.getName());
-            if (clientLead.getCompany() != null) existing.setCompany(clientLead.getCompany());
-            if (clientLead.getEmail() != null) existing.setEmail(clientLead.getEmail());
-            if (clientLead.getAddress() != null) existing.setAddress(clientLead.getAddress());
-            if (clientLead.getAbn() != null) existing.setAbn(clientLead.getAbn());
-            if (clientLead.getPhone() != null) existing.setPhone(clientLead.getPhone());
-            if (clientLead.getTags() != null) existing.setTags(clientLead.getTags());
+            existing.setName(clientLead.getName());
+            existing.setCompany(clientLead.getCompany());
+            existing.setEmail(clientLead.getEmail());
+            existing.setPhone(clientLead.getPhone());
+            existing.setTags(clientLead.getTags());
+            existing.setAddress(clientLead.getAddress());
+            existing.setAbn(clientLead.getAbn());
+            existing.setPipelineStage(clientLead.getPipelineStage());
+            existing.setClient(clientLead.isClient());
+
             if (clientLead.getClientCode() != null) existing.setClientCode(clientLead.getClientCode());
+            if (clientLead.getMarketer() != null) existing.setMarketer(clientLead.getMarketer());
             if (clientLead.getEstimatedWeeklyRevenue() != null) existing.setEstimatedWeeklyRevenue(clientLead.getEstimatedWeeklyRevenue());
             if (clientLead.getMarketersCut() != null) existing.setMarketersCut(clientLead.getMarketersCut());
 
-            existing.setMarketer(clientLead.getMarketer());
-
-            if (clientLead.getPipelineStage() != null) {
-                existing.setPipelineStage(clientLead.getPipelineStage());
-                existing.setClient(clientLead.getPipelineStage() == PipelineStage.ACTIVE);
-            }
-
             return clientLeadRepository.save(existing);
-        }
-
-        if (clientLead.getPipelineStage() != null) {
-            clientLead.setClient(clientLead.getPipelineStage() == PipelineStage.ACTIVE);
         }
         return clientLeadRepository.save(clientLead);
     }

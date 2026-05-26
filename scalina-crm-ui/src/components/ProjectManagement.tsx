@@ -525,11 +525,12 @@ export const ProjectManagement: React.FC = () => {
                         <form onSubmit={handleSaveProject} className="space-y-4">
                             <select required className="w-full border-gray-200 border p-3 rounded-xl outline-none focus:border-blue-400" value={modalClientId} onChange={e => handleModalClientChange(e.target.value === '' ? '' : Number(e.target.value))}>
                                 <option value="">Select Client</option>
-                                {/* Filter to hide inactive clients only in the dropdown */}
+                                {/* Filter to show only clients in ACTIVE phase */}
                                 {clients
-                                    .filter((c: ClientLead) => c.pipelineStage !== 'INACTIVE')
+                                    .filter((c: ClientLead) => c.pipelineStage === 'ACTIVE' && c.client === true)
                                     .map((c: ClientLead) => <option key={c.id} value={c.id}>{c.name}</option>)
                                 }
+
                             </select>
                             <div className="flex gap-4">
                                 <div className="flex-1">
